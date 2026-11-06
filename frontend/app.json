@@ -14,7 +14,8 @@
         "foregroundImage": "./assets/iconoapp.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.lacocina.pos"
+      "package": "com.lacocina.pos",
+      "usesCleartextTraffic": true
     },
     "web": {
       "favicon": "./assets/iconoapp.png"
@@ -32,6 +33,11 @@
           "backgroundColor": "#FFFFFF"
         }
       ]
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "685f8056-7247-4c75-8e88-4ae2a2a11d8f"
+      }
+    }
   }
 }

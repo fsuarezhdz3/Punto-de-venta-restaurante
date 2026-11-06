@@ -15,9 +15,7 @@ backend/uploads/
 uploads/
 
 # Environment & Secret files
-.env
 *.env
-.env.*
 
 # Logs & debugging
 *.log
@@ -31,7 +29,6 @@ logs/
 .DS_Store
 Thumbs.db
 desktop.ini
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -40,3 +37,4 @@ desktop.ini
 *.tmp
 *.temp
 .cache/
+config.bat
