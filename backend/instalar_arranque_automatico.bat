@@ -11,7 +11,7 @@ set STARTUP_VBS=%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\iniciar_
 (
 echo Set WshShell = CreateObject^("WScript.Shell"^)
 echo WshShell.CurrentDirectory = "%SCRIPT_DIR%"
-echo WshShell.Run "node src/server.js", 0, False
+echo WshShell.Run "cmd /c node src/server.js > startup.log 2>&1", 0, False
 ) > "%STARTUP_VBS%"
 
 if exist "%STARTUP_VBS%" (
