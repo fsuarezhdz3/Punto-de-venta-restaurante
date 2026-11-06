@@ -7,6 +7,11 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthProvider, AuthContext } from './src/context/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
 import HomeScreen from './src/screens/HomeScreen';
+import ErrorBoundary from './src/components/ErrorBoundary';
+import { initGlobalErrorHandling } from './src/services/errorReporter';
+
+// Inicializar captura global de errores para móviles y web
+initGlobalErrorHandling();
 
 const Stack = createNativeStackNavigator();
 
@@ -42,9 +47,11 @@ function Navigation() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <Navigation />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <Navigation />
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
 

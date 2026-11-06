@@ -41,6 +41,7 @@ export default function ModalTicketPreview({ visible, comanda, opcionesCobro = {
 
   const items = comanda.items || [];
   const total = Number(comanda.total || items.reduce((acc, i) => acc + (Number(i.costo) || 0), 0));
+  const pagos = comanda.pagos || opcionesCobro?.pagos || [];
 
   const fechaObj = comanda.fecha_pedido ? new Date(comanda.fecha_pedido) : new Date();
   const fechaStr = fechaObj.toLocaleDateString('es-MX');
@@ -125,6 +126,40 @@ export default function ModalTicketPreview({ visible, comanda, opcionesCobro = {
               <Text style={styles.ticketTotalLabel}>TOTAL:</Text>
               <Text style={styles.ticketTotalValue}>${total.toFixed(2)}</Text>
             </View>
+
+            {Array.isArray(pagos) && pagos.length > 0 ? (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.ticketDividerDash} />
+                <Text style={[styles.ticketMetaText, { fontWeight: '700', marginBottom: 3 }]}>FORMA DE PAGO:</Text>
+                {pagos.map((p, pIdx) => (
+                  <View key={pIdx} style={{ marginBottom: 3 }}>
+                    <View style={styles.ticketRow}>
+                      <Text style={styles.ticketMetaText}>
+                        {(p.metodo_pago || 'efectivo').toUpperCase()}{p.referencia ? ` (${p.referencia})` : ''}:
+                      </Text>
+                      <Text style={[styles.ticketMetaText, { fontWeight: '700' }]}>
+                        ${Number(p.monto).toFixed(2)}
+                      </Text>
+                    </View>
+                    {p.metodo_pago === 'efectivo' && Number(p.monto_recibido) > Number(p.monto) ? (
+                      <Text style={[styles.ticketMetaText, { fontSize: 10, color: '#64748B' }]}>
+                        Recibido: ${Number(p.monto_recibido).toFixed(2)} | Cambio: ${Number(p.cambio).toFixed(2)}
+                      </Text>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : (comanda.metodo_pago || opcionesCobro.metodo_pago) ? (
+              <View style={{ marginTop: 6 }}>
+                <View style={styles.ticketDividerDash} />
+                <View style={styles.ticketRow}>
+                  <Text style={styles.ticketMetaText}>Método:</Text>
+                  <Text style={[styles.ticketMetaText, { fontWeight: '700' }]}>
+                    {(comanda.metodo_pago || opcionesCobro.metodo_pago).toUpperCase()}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
 
             <View style={styles.ticketDividerSolid} />
 

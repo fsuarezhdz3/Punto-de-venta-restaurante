@@ -9,6 +9,10 @@ web-build/
 **/web-build/
 dist/
 **/dist/
+dist-electron/
+**/dist-electron/
+backend/uploads/
+uploads/
 
 # Environment & Secret files
 .env
@@ -20,6 +24,8 @@ dist/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+backend/logs/
+logs/
 
 # OS & Editor generated files
 .DS_Store

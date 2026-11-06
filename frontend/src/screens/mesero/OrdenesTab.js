@@ -74,7 +74,7 @@ const limpiarZona = (str = '') => {
 };
 
 export default function OrdenesTab() {
-  const { selectedMesa, setActiveTab } = useContext(MeseroContext);
+  const { selectedMesa, setActiveTab, selectMesa } = useContext(MeseroContext);
   const { width } = useWindowDimensions();
   const [itemsComanda, setItemsComanda] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -204,9 +204,13 @@ export default function OrdenesTab() {
         if (beb.length > 0) setCatBebidas(beb);
         if (gui.length > 0) setCatGuisos(['Sencillo', ...gui]);
         if (ext.length > 0) setCatExtras(ext);
+
+        return data.alimentos;
       }
+      return [];
     } catch (e) {
       console.log('Usando catálogo local en OrdenesTab:', e.message);
+      return [];
     }
   };
 
@@ -244,11 +248,35 @@ export default function OrdenesTab() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [pickerConfig, setPickerConfig] = useState({ title: '', field: '', options: [] });
 
-  // Helper para buscar un objeto alimento en alimentosBD ignorando la zona (-cocina, -comal, -barra)
-  const buscarAlimentoCatalog = (nombreStr) => {
-    if (!nombreStr) return null;
-    const limpio = limpiarZona(nombreStr).toLowerCase();
-    return alimentosBD.find((a) => a.nombre && a.nombre.toLowerCase() === limpio) || null;
+  // Helper para buscar un objeto alimento en alimentosBD ignorando la zona (-cocina, -comal, -barra) y detalles de volumen
+  const buscarAlimentoCatalog = (nombreRaw, listaCat = alimentosBD) => {
+    if (!nombreRaw) return null;
+    const limpio = String(nombreRaw).replace(/-[a-zA-Z0-9_]+$/g, '').trim().toLowerCase();
+    if (!limpio) return null;
+
+    const lista = listaCat && listaCat.length > 0 ? listaCat : alimentosBD;
+    if (!lista || lista.length === 0) return null;
+
+    // 1. Coincidencia exacta de nombre
+    let match = lista.find((a) => a.nombre && a.nombre.trim().toLowerCase() === limpio);
+    if (match) return match;
+
+    // 2. Coincidencia sin texto entre paréntesis (ej: "(500ml)", "(1 Litro)", "(3 pz)")
+    const sinParéntesis = limpio.replace(/\s*\([^)]*\)/g, '').trim();
+    match = lista.find((a) => {
+      const aLimpio = (a.nombre || '').replace(/\s*\([^)]*\)/g, '').trim().toLowerCase();
+      return aLimpio === sinParéntesis;
+    });
+    if (match) return match;
+
+    // 3. Coincidencia por subcadena / contención
+    match = lista.find((a) => {
+      const aName = (a.nombre || '').toLowerCase();
+      return aName.includes(limpio) || limpio.includes(aName);
+    });
+    if (match) return match;
+
+    return null;
   };
 
   // Helper para verificar si un formulario de edición cumple los requisitos de Paquete Completo
@@ -270,43 +298,56 @@ export default function OrdenesTab() {
   };
 
   // Helper para calcular dinámicamente el precio del ítem editado (Paquete Completo vs Elementos Individuales)
-  const calcularCostoPaqueteEdicion = (cat, form) => {
+  const calcularCostoPaqueteEdicion = (cat, form, listaCat = alimentosBD) => {
     const esCompleto = esPaqueteCompletoEdicion(cat, form);
 
-    const getPrecioElem = (nombreStr) => {
+    const getPrecioElem = (nombreStr, tipoFallback) => {
       if (!nombreStr) return 0;
-      const obj = buscarAlimentoCatalog(nombreStr);
-      if (!obj) return 0;
-      const normal = Number(obj.precio || 0);
-      const pkgPrice = (obj.precio_paquete !== null && obj.precio_paquete !== undefined && Number(obj.precio_paquete) > 0)
-        ? Number(obj.precio_paquete)
-        : normal;
+      const obj = buscarAlimentoCatalog(nombreStr, listaCat);
+      if (obj) {
+        const normal = Number(obj.precio || 0);
+        const pkgPrice = (obj.precio_paquete !== null && obj.precio_paquete !== undefined && Number(obj.precio_paquete) > 0)
+          ? Number(obj.precio_paquete)
+          : normal;
 
-      return esCompleto ? pkgPrice : normal;
+        return esCompleto ? pkgPrice : normal;
+      }
+
+      // Precios de respaldo si el ítem aún no está cargado en el estado local
+      let defaultNormal = 30;
+      let defaultPkg = 15;
+      if (tipoFallback === 'plato') { defaultNormal = 110; defaultPkg = 65; }
+      else if (tipoFallback === 'entrada') { defaultNormal = 35; defaultPkg = 15; }
+      else if (tipoFallback === 'guarnicion') { defaultNormal = 30; defaultPkg = 10; }
+      else if (tipoFallback === 'bebida') { defaultNormal = 30; defaultPkg = 15; }
+
+      return esCompleto ? defaultPkg : defaultNormal;
     };
 
-    const pAlimento = getPrecioElem(form.alimento);
-    const pEntrada = getPrecioElem(form.entrada);
-    const pGuarnicion1 = getPrecioElem(form.guarnicion1);
-    const pGuarnicion2 = getPrecioElem(form.guarnicion2);
-    const pBebida = getPrecioElem(form.bebida);
+    const pAlimento = getPrecioElem(form.alimento, 'plato');
+    const pEntrada = getPrecioElem(form.entrada, 'entrada');
+    const pGuarnicion1 = getPrecioElem(form.guarnicion1, 'guarnicion');
+    const pGuarnicion2 = getPrecioElem(form.guarnicion2, 'guarnicion');
+    const pBebida = getPrecioElem(form.bebida, 'bebida');
 
     // Extras
     const arrayExtras = form.extras ? form.extras.split(', ').filter(Boolean) : [];
     const pExtras = arrayExtras.reduce((sum, extraNombre) => {
-      const objExtra = buscarAlimentoCatalog(extraNombre);
-      return sum + Number(objExtra?.precio || 0);
+      const objExtra = buscarAlimentoCatalog(extraNombre, listaCat);
+      return sum + Number(objExtra?.precio || 20);
     }, 0);
 
     // Guisado extra en Antojitos
     let pGuisoExtra = 0;
     if (cat === 'antojitos' && form.guiso && form.guiso !== 'Sencillo') {
-      const objGuiso = buscarAlimentoCatalog(form.guiso);
-      const objAntojito = buscarAlimentoCatalog(form.alimento);
+      const objGuiso = buscarAlimentoCatalog(form.guiso, listaCat);
+      const objAntojito = buscarAlimentoCatalog(form.alimento, listaCat);
       if (objGuiso?.precio_antojito !== null && objGuiso?.precio_antojito !== undefined && Number(objGuiso?.precio_antojito) >= 0) {
         pGuisoExtra = Number(objGuiso.precio_antojito);
       } else if (objAntojito?.precio_antojito !== null && objAntojito?.precio_antojito !== undefined && Number(objAntojito?.precio_antojito) > 0) {
         pGuisoExtra = Number(objAntojito.precio_antojito);
+      } else {
+        pGuisoExtra = 15;
       }
     }
 
@@ -409,7 +450,12 @@ export default function OrdenesTab() {
   };
 
   // Abrir Modal de Edición pre-llenado
-  const abrirModalEditar = (item) => {
+  const abrirModalEditar = async (item) => {
+    let listaCat = alimentosBD;
+    if (!listaCat || listaCat.length === 0) {
+      listaCat = await cargarCatalogosBD();
+    }
+
     const cat = detectarCategoriaItem(item);
     setCategoriaEditForm(cat);
     setItemEditando(item);
@@ -425,7 +471,7 @@ export default function OrdenesTab() {
       costo: String(item.costo || '0'),
     };
 
-    const costoRecalculado = calcularCostoPaqueteEdicion(cat, formInicial);
+    const costoRecalculado = calcularCostoPaqueteEdicion(cat, formInicial, listaCat);
     if (costoRecalculado > 0) {
       formInicial.costo = String(costoRecalculado);
     }
@@ -462,7 +508,14 @@ export default function OrdenesTab() {
       bebidaFinal = `${bebidaLimpia}-${zonaBebida}`;
     }
 
+    const nombreSinCantidad = alimentoLimpio.replace(/^\d+x\s*/i, '').trim();
+    const alimentoEncontrado = alimentosBD.find(
+      (a) => a.nombre && a.nombre.toLowerCase() === nombreSinCantidad.toLowerCase()
+    );
+    const idAlimentoFinal = alimentoEncontrado ? alimentoEncontrado.id : (itemEditando.id_alimento || null);
+
     const payload = {
+      id_alimento: idAlimentoFinal,
       alimento: alimentoFinal,
       entrada: entradaFinal,
       guiso: esAntojito ? (editForm.guiso ? limpiarZona(editForm.guiso) : null) : null,
@@ -488,6 +541,7 @@ export default function OrdenesTab() {
               ? {
                   ...i,
                   ...payload,
+                  id_alimento: idAlimentoFinal,
                   entrada: payload.entrada || '',
                   guiso: payload.guiso || '',
                   guarnicion1: payload.guarnicion1 || '',
@@ -537,10 +591,12 @@ export default function OrdenesTab() {
     }
   };
 
-  // Sincronizar filtroScope con selectedMesa si no hay mesa seleccionada
+  // Sincronizar filtroScope con selectedMesa si no hay mesa seleccionada o si se selecciona una mesa
   useEffect(() => {
     if (!selectedMesa && filtroScope === 'mesa') {
       setFiltroScope('todas');
+    } else if (selectedMesa) {
+      setFiltroScope('mesa');
     }
   }, [selectedMesa]);
 
@@ -874,11 +930,8 @@ export default function OrdenesTab() {
         <TouchableOpacity
           style={[styles.scopeBtn, filtroScope === 'mesa' && styles.scopeBtnActive]}
           onPress={() => {
-            if (!selectedMesa) {
-              Alert.alert('Sin Mesa', 'Selecciona primero una mesa en la pestaña Mesas.');
-              return;
-            }
             setFiltroScope('mesa');
+            setActiveTab('mesas');
           }}
           activeOpacity={0.8}
         >
@@ -890,7 +943,7 @@ export default function OrdenesTab() {
           />
           <Text style={[styles.scopeBtnText, filtroScope === 'mesa' && styles.scopeBtnTextActive]}>
             {(() => {
-              if (!selectedMesa) return 'Mesa Seleccionada';
+              if (!selectedMesa) return 'Sin Mesa Seleccionada';
               const numMesa = Number(selectedMesa.num_mesa || selectedMesa.id || 0);
               if (!isNaN(numMesa) && numMesa >= 100) {
                 return `Para Llevar #${numMesa}`;
@@ -1048,7 +1101,18 @@ export default function OrdenesTab() {
                   {/* Encabezado del ítem con badge de mesa, costo y botones Editar/Cancelar */}
                   <View style={styles.itemHeaderRow}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                      <View style={[styles.mesaBadgeInline, esParaLlevar && styles.mesaBadgeInlineParaLlevar]}>
+                      <TouchableOpacity
+                        style={[styles.mesaBadgeInline, esParaLlevar && styles.mesaBadgeInlineParaLlevar]}
+                        onPress={() => {
+                          const mesaObj = {
+                            num_mesa: numMesaValida,
+                            tipo: esParaLlevar ? 'para_llevar' : 'mesa',
+                            nombre: esParaLlevar ? `Para Llevar #${numMesaValida}` : `Mesa #${numMesaValida}`,
+                          };
+                          selectMesa(mesaObj, 'mesas');
+                        }}
+                        activeOpacity={0.7}
+                      >
                         <Ionicons
                           name={esParaLlevar ? "bag-handle-outline" : "restaurant-outline"}
                           size={13}
@@ -1058,7 +1122,13 @@ export default function OrdenesTab() {
                         <Text style={[styles.mesaBadgeInlineText, esParaLlevar && styles.mesaBadgeInlineTextParaLlevar]}>
                           {esParaLlevar ? `Para llevar #${numMesaValida}` : `Mesa #${numMesaValida}`}
                         </Text>
-                      </View>
+                        <Ionicons
+                          name="chevron-forward-outline"
+                          size={12}
+                          color={esParaLlevar ? "#C2410C" : "#0D9488"}
+                          style={{ marginLeft: 3 }}
+                        />
+                      </TouchableOpacity>
                       {Number(item.estado) === 1 && (
                         <View style={styles.badgeCocinaListo}>
                           <Text style={styles.badgeCocinaListoText}>🍳 Listo Cocina</Text>
@@ -1234,24 +1304,16 @@ export default function OrdenesTab() {
               </TouchableOpacity>
             </View>
 
-            {(categoriaEditForm === 'comida' || categoriaEditForm === 'desayunos') && (
-              <View style={[
-                styles.tarifaBadgeBox,
-                esPaqueteCompletoEdicion(categoriaEditForm, editForm) ? styles.tarifaBadgeBoxCompleto : styles.tarifaBadgeBoxIncompleto
-              ]}>
+            {esPaqueteCompletoEdicion(categoriaEditForm, editForm) && (
+              <View style={[styles.tarifaBadgeBox, styles.tarifaBadgeBoxCompleto]}>
                 <Ionicons
-                  name={esPaqueteCompletoEdicion(categoriaEditForm, editForm) ? "checkmark-circle" : "alert-circle-outline"}
+                  name="checkmark-circle"
                   size={16}
-                  color={esPaqueteCompletoEdicion(categoriaEditForm, editForm) ? "#0F766E" : "#D97706"}
+                  color="#0F766E"
                   style={{ marginRight: 6 }}
                 />
-                <Text style={[
-                  styles.tarifaBadgeText,
-                  esPaqueteCompletoEdicion(categoriaEditForm, editForm) ? styles.tarifaBadgeTextCompleto : styles.tarifaBadgeTextIncompleto
-                ]}>
-                  {esPaqueteCompletoEdicion(categoriaEditForm, editForm)
-                    ? 'Tarifa de Paquete Completo Aplicada ✅'
-                    : 'Paquete Incompleto (Cobro de Elementos Individuales) ⚠️'}
+                <Text style={[styles.tarifaBadgeText, styles.tarifaBadgeTextCompleto]}>
+                  Tarifa de Paquete Completo Aplicada ✅
                 </Text>
               </View>
             )}
@@ -1543,13 +1605,18 @@ export default function OrdenesTab() {
 
               {/* 4. COSTO TOTAL */}
               <Text style={styles.inputLabel}>Costo Total ($)</Text>
-              <TextInput
-                style={styles.textInput}
-                keyboardType="numeric"
-                value={editForm.costo}
-                onChangeText={(txt) => setEditForm((p) => ({ ...p, costo: txt }))}
-                placeholder="0"
-              />
+              <View style={styles.costoInputContainer}>
+                <Text style={styles.costoSignoText}>$</Text>
+                <TextInput
+                  style={styles.costoTextInput}
+                  keyboardType="numeric"
+                  value={editForm.costo}
+                  onChangeText={(txt) => setEditForm((p) => ({ ...p, costo: txt }))}
+                  placeholder="0.00"
+                  placeholderTextColor="#94A3B8"
+                  selectTextOnFocus={true}
+                />
+              </View>
             </ScrollView>
 
             <View style={styles.modalButtonsRow}>
@@ -2434,5 +2501,28 @@ const styles = StyleSheet.create({
   },
   tarifaBadgeTextIncompleto: {
     color: '#B45309',
+  },
+  costoInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#0D9488',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    height: 48,
+  },
+  costoSignoText: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0D9488',
+    marginRight: 6,
+  },
+  costoTextInput: {
+    flex: 1,
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+    height: '100%',
   },
 });

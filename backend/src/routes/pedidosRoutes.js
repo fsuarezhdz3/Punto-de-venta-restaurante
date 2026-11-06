@@ -21,6 +21,7 @@ const {
   getParaLlevarActivos,
   getSiguienteMesaParaLlevar,
   imprimirTicketDirecto,
+  getPagosPorOrden,
 } = require('../controllers/pedidosController');
 
 // GET /api/pedidos/para-llevar/activos
@@ -52,6 +53,9 @@ router.put('/alimento-pedido/:id/bloques', cambiarBloquesAlimentoPedido);
 
 // PUT /api/pedidos/orden/:num_orden/estado
 router.put('/orden/:num_orden/estado', cambiarEstadoOrden);
+
+// GET /api/pedidos/orden/:num_orden/pagos
+router.get('/orden/:num_orden/pagos', getPagosPorOrden);
 
 // PUT /api/pedidos/alimento-pedido/:id/editar
 router.put('/alimento-pedido/:id/editar', editarAlimentoPedido);

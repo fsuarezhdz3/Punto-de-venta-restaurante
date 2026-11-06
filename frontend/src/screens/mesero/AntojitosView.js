@@ -267,6 +267,7 @@ export default function AntojitosView({ onVolverMenu }) {
             : null;
 
           return {
+            id_alimento: p.antojito?.id || null,
             alimento: alimentoConZona,
             costo: costoPaquete,
             guiso: guisoFinal,

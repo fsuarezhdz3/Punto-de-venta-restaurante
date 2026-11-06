@@ -105,6 +105,42 @@ export function generarHTMLTicket(comanda, opciones = {}) {
     })
     .join('');
 
+  const pagos = comanda.pagos || opciones.pagos || [];
+  let pagosHTML = '';
+  if (Array.isArray(pagos) && pagos.length > 0) {
+    pagosHTML = `
+      <div class="divider"></div>
+      <div style="font-size: 10px; font-weight: bold; margin-bottom: 2px;">FORMA DE PAGO:</div>
+      ${pagos
+        .map((p) => {
+          const met = (p.metodo_pago || 'efectivo').toUpperCase();
+          const ref = p.referencia ? ` (${p.referencia})` : '';
+          const m = Number(p.monto).toFixed(2);
+          let extraInfo = '';
+          if (p.metodo_pago === 'efectivo' && Number(p.monto_recibido) > Number(p.monto)) {
+            extraInfo = `<div style="font-size: 9px; color: #555;">Recibido: $${Number(p.monto_recibido).toFixed(2)} | Cambio: $${Number(p.cambio).toFixed(2)}</div>`;
+          }
+          return `
+            <div class="info-row">
+              <span>${met}${ref}:</span>
+              <span class="bold">$${m}</span>
+            </div>
+            ${extraInfo}
+          `;
+        })
+        .join('')}
+    `;
+  } else if (comanda.metodo_pago || opciones.metodo_pago) {
+    const met = (comanda.metodo_pago || opciones.metodo_pago).toUpperCase();
+    pagosHTML = `
+      <div class="divider"></div>
+      <div class="info-row">
+        <span>Método:</span>
+        <span class="bold">${met}</span>
+      </div>
+    `;
+  }
+
   return `
     <!DOCTYPE html>
     <html>
@@ -240,6 +276,7 @@ export function generarHTMLTicket(comanda, opciones = {}) {
           <span>TOTAL:</span>
           <span>$${total.toFixed(2)}</span>
         </div>
+        ${pagosHTML}
 
         <div class="divider-double"></div>
 
@@ -336,6 +373,27 @@ export function generarTextoESCPOS(comanda, opciones = {}) {
 
   lines.push(divider('-'));
   lines.push(padRow('TOTAL:', `$${total.toFixed(2)}`));
+
+  const pagos = comanda.pagos || opciones.pagos || [];
+  if (Array.isArray(pagos) && pagos.length > 0) {
+    lines.push(divider('-'));
+    lines.push('FORMA DE PAGO:');
+    pagos.forEach((p) => {
+      const met = (p.metodo_pago || 'efectivo').toUpperCase();
+      const ref = p.referencia ? ` (${p.referencia})` : '';
+      const m = `$${Number(p.monto).toFixed(2)}`;
+      lines.push(padRow(`${met}${ref}:`, m));
+      if (p.metodo_pago === 'efectivo' && Number(p.monto_recibido) > Number(p.monto)) {
+        lines.push(`  Recibido: $${Number(p.monto_recibido).toFixed(2)}`);
+        lines.push(`  Cambio:   $${Number(p.cambio).toFixed(2)}`);
+      }
+    });
+  } else if (comanda.metodo_pago || opciones.metodo_pago) {
+    const met = (comanda.metodo_pago || opciones.metodo_pago).toUpperCase();
+    lines.push(divider('-'));
+    lines.push(padRow('METODO DE PAGO:', met));
+  }
+
   lines.push(divider('='));
   lines.push('Gracias por su preferencia!');
   lines.push('  La Cocina de Mama\n\n\n');

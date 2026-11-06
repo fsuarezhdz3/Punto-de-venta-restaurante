@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { API_URL } from '../config/api';
+import { setCurrentReporterUser } from '../services/errorReporter';
 
 export const AuthContext = createContext();
 
@@ -12,6 +13,10 @@ export const AuthProvider = ({ children }) => {
   useEffect(() => {
     loadStorageData();
   }, []);
+
+  useEffect(() => {
+    setCurrentReporterUser(user);
+  }, [user]);
 
   const loadStorageData = async () => {
     try {

@@ -112,6 +112,7 @@ export default function EntradasView({ onVolverMenu }) {
 
     try {
       const itemsPayload = preorden.map((p) => ({
+        id_alimento: p.id || null,
         alimento: `${p.cantidad}x ${p.nombre}`,
         costo: Number(p.precio) * p.cantidad,
         extras: '',

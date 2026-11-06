@@ -62,50 +62,35 @@ export default function BebidasView({ onVolverMenu }) {
     }
   };
 
-  // Agregar bebida a la preorden (o incrementar cantidad)
+  // Agregar bebida a la preorden (registro individual sin stackear cantidad)
   const handleAgregarBebida = (item) => {
-    setPreorden((prev) => {
-      const existe = prev.find((p) => p.id === item.id);
-      if (existe) {
-        return prev.map((p) =>
-          p.id === item.id ? { ...p, cantidad: p.cantidad + 1 } : p
-        );
-      }
-      return [...prev, { ...item, cantidad: 1, comentarios: '' }];
-    });
+    const nuevoItem = {
+      ...item,
+      tempId: `${item.id}_${Date.now()}_${Math.random()}`,
+      id_alimento: item.id,
+      comentarios: '',
+    };
+    setPreorden((prev) => [...prev, nuevoItem]);
   };
 
-  // Decrementar o eliminar bebida de la preorden
-  const handleDecrementarBebida = (id) => {
-    setPreorden((prev) => {
-      const existe = prev.find((p) => p.id === id);
-      if (existe.cantidad > 1) {
-        return prev.map((p) =>
-          p.id === id ? { ...p, cantidad: p.cantidad - 1 } : p
-        );
-      }
-      return prev.filter((p) => p.id !== id);
-    });
-  };
-
-  // Eliminar bebida completamente de la preorden
-  const handleEliminarBebida = (id) => {
-    setPreorden((prev) => prev.filter((p) => p.id !== id));
+  // Eliminar bebida individual de la preorden
+  const handleEliminarBebida = (tempId) => {
+    setPreorden((prev) => prev.filter((p) => p.tempId !== tempId));
   };
 
   // Actualizar comentario específico de una bebida
-  const handleComentarioBebida = (id, texto) => {
+  const handleComentarioBebida = (tempId, texto) => {
     setPreorden((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, comentarios: texto } : p))
+      prev.map((p) => (p.tempId === tempId ? { ...p, comentarios: texto } : p))
     );
   };
 
   // Calcular total acumulado de la preorden
   const calcularTotal = () => {
-    return preorden.reduce((sum, p) => sum + Number(p.precio) * p.cantidad, 0);
+    return preorden.reduce((sum, p) => sum + Number(p.precio), 0);
   };
 
-  // Enviar pedido a barra / cocina guardando en BD
+  // Enviar pedido a barra / cocina guardando en BD (un alimento_pedido por cada bebida)
   const handleEnviarPedido = async () => {
     if (!selectedMesa) {
       showSinMesaModal();
@@ -115,8 +100,9 @@ export default function BebidasView({ onVolverMenu }) {
 
     try {
       const itemsPayload = preorden.map((p) => ({
-        alimento: `${p.cantidad}x ${p.nombre}-barra`,
-        costo: Number(p.precio) * p.cantidad,
+        id_alimento: p.id || null,
+        alimento: `1x ${p.nombre}-barra`,
+        costo: Number(p.precio),
         extras: '',
         comentarios: p.comentarios || '',
       }));
@@ -179,7 +165,7 @@ export default function BebidasView({ onVolverMenu }) {
             <Text style={styles.preordenTitle}>Pre-orden de Bebidas</Text>
             {preorden.length > 0 && (
               <View style={styles.badgeItemsCount}>
-                <Text style={styles.badgeItemsCountText}>{preorden.reduce((s, i) => s + i.cantidad, 0)} ítems</Text>
+                <Text style={styles.badgeItemsCountText}>{preorden.length} ítems</Text>
               </View>
             )}
           </View>
@@ -193,51 +179,30 @@ export default function BebidasView({ onVolverMenu }) {
           ) : (
             <View style={styles.preordenItemsList}>
               {preorden.map((item) => (
-                <View key={item.id} style={styles.preordenItemCard}>
+                <View key={item.tempId} style={styles.preordenItemCard}>
                   <View style={styles.preordenItemTop}>
                     <View style={styles.preordenItemInfo}>
                       <Text style={styles.preordenItemNombre}>{item.nombre}</Text>
-                      <Text style={styles.preordenItemPrecioUnit}>${item.precio}.00 c/u</Text>
                     </View>
 
                     <Text style={styles.preordenItemSubtotal}>
-                      ${Number(item.precio) * item.cantidad}.00
+                      ${Number(item.precio)}.00
                     </Text>
                   </View>
 
-                  {/* Controles de Cantidad (+ / -) y Eliminar */}
+                  {/* Aclaraciones y Eliminar */}
                   <View style={styles.preordenItemBottomRow}>
-                    <View style={styles.counterRow}>
-                      <TouchableOpacity
-                        style={styles.btnCounter}
-                        onPress={() => handleDecrementarBebida(item.id)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="remove" size={16} color="#0F172A" />
-                      </TouchableOpacity>
-
-                      <Text style={styles.counterValueText}>{item.cantidad}</Text>
-
-                      <TouchableOpacity
-                        style={styles.btnCounter}
-                        onPress={() => handleAgregarBebida(item)}
-                        activeOpacity={0.7}
-                      >
-                        <Ionicons name="add" size={16} color="#0F172A" />
-                      </TouchableOpacity>
-                    </View>
-
                     <TextInput
                       style={styles.inputComentarioItem}
                       placeholder="Aclaraciones (ej. con hielo)..."
                       placeholderTextColor="#94A3B8"
                       value={item.comentarios}
-                      onChangeText={(txt) => handleComentarioBebida(item.id, txt)}
+                      onChangeText={(txt) => handleComentarioBebida(item.tempId, txt)}
                     />
 
                     <TouchableOpacity
                       style={styles.btnDeletePreordenItem}
-                      onPress={() => handleEliminarBebida(item.id)}
+                      onPress={() => handleEliminarBebida(item.tempId)}
                       activeOpacity={0.7}
                     >
                       <Ionicons name="trash-outline" size={18} color="#DC2626" />

@@ -293,6 +293,7 @@ export default function DesayunosView({ onVolverMenu }) {
           }
 
           return {
+            id_alimento: p.desayuno?.id || null,
             alimento: alimentoConZona,
             costo: costoPaquete,
             guarnicion1: p.guarnicion1?.nombre || null,

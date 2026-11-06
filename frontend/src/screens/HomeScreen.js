@@ -28,8 +28,8 @@ export default function HomeScreen() {
     return <CocinaHomeScreen />;
   }
 
-  // Si el tipo de usuario es superadmin, mostrar el panel completo de superadmin
-  if (user?.tipo?.toLowerCase() === 'superadmin') {
+  // Si el tipo de usuario es superadmin o desarrollador, mostrar el panel de superadmin/desarrollador
+  if (user?.tipo?.toLowerCase() === 'superadmin' || user?.tipo?.toLowerCase() === 'desarrollador') {
     return <SuperAdminHomeScreen />;
   }
 
@@ -40,6 +40,16 @@ export default function HomeScreen() {
 
   const getRoleConfig = (tipo) => {
     switch (tipo?.toLowerCase()) {
+      case 'desarrollador':
+        return {
+          greetingTitle: '¡Hola Desarrollador!',
+          roleName: 'Desarrollador',
+          color: '#6366F1',
+          lightBg: '#EEF2FF',
+          borderColor: '#C7D2FE',
+          icon: 'code-slash-outline',
+          description: 'Acceso a herramientas de depuración, monitoreo de errores y auditoría técnica.',
+        };
       case 'superadmin':
         return {
           greetingTitle: '¡Hola SuperAdmin!',

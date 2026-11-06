@@ -81,7 +81,7 @@ El sistema sigue una arquitectura **Cliente-Servidor (Decoupled REST API)**:
 1. **`alimentos`**:
    - `id`: INT (PK, Auto-increment)
    - `nombre`: VARCHAR(100)
-   - `tipo`: ENUM/VARCHAR ('Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra')
+   - `tipo`: ENUM/VARCHAR ('Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros')
    - `precio`: DECIMAL(10,2) (Precio regular)
    - `precio_paquete`: DECIMAL(10,2) (Precio especial si aplica en paquete)
    - `precio_antojito`: DECIMAL(10,2) (Precio especial en antojitos)

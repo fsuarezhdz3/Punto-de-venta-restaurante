@@ -1,3 +1,5 @@
+const path = require('path');
+const fs = require('fs');
 const db = require('../config/db');
 
 // GET /api/alimentos
@@ -281,6 +283,131 @@ const actualizarPreciosMasivo = async (req, res) => {
   }
 };
 
+// GET /api/alimentos/menu-diseno
+// Consultar plantilla y diseño guardado del Menú del Día
+const getMenuDiseno = async (req, res) => {
+  try {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS menu_diseno (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          nombre VARCHAR(50) NOT NULL DEFAULT 'default',
+          imagen_fondo LONGTEXT NULL,
+          config_bloques LONGTEXT NULL,
+          fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+    } catch (e) {}
+
+    const [rows] = await db.query(
+      `SELECT * FROM menu_diseno WHERE nombre = 'default' ORDER BY id DESC LIMIT 1`
+    );
+
+    if (rows.length === 0) {
+      return res.json({ ok: true, diseno: null });
+    }
+
+    const item = rows[0];
+    let configBloquesParsed = null;
+    if (item.config_bloques) {
+      try {
+        configBloquesParsed = JSON.parse(item.config_bloques);
+      } catch (err) {
+        configBloquesParsed = item.config_bloques;
+      }
+    }
+
+    return res.json({
+      ok: true,
+      diseno: {
+        id: item.id,
+        nombre: item.nombre,
+        imagen_fondo: item.imagen_fondo,
+        config_bloques: configBloquesParsed,
+        fecha_actualizacion: item.fecha_actualizacion,
+      },
+    });
+  } catch (error) {
+    console.error('Error al consultar diseño del menú:', error);
+    return res.status(500).json({ error: 'Error al consultar diseño del menú' });
+  }
+};
+
+// POST /api/alimentos/menu-diseno
+// Guardar o actualizar la plantilla y diseño del Menú del Día
+const guardarMenuDiseno = async (req, res) => {
+  const { imagen_fondo, config_bloques } = req.body;
+
+  try {
+    try {
+      await db.query(`
+        CREATE TABLE IF NOT EXISTS menu_diseno (
+          id INT PRIMARY KEY AUTO_INCREMENT,
+          nombre VARCHAR(50) NOT NULL DEFAULT 'default',
+          imagen_fondo LONGTEXT NULL,
+          config_bloques LONGTEXT NULL,
+          fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+        )
+      `);
+    } catch (e) {}
+
+    let imagenFinal = imagen_fondo;
+
+    // Si la imagen viene en base64 (data:image/...), guardarla en la carpeta de subidas en disco
+    if (imagen_fondo && typeof imagen_fondo === 'string' && imagen_fondo.startsWith('data:image/')) {
+      try {
+        const matches = imagen_fondo.match(/^data:image\/([a-zA-Z0-9+]+);base64,(.+)$/);
+        if (matches && matches.length === 3) {
+          const rawExt = matches[1].toLowerCase();
+          const ext = rawExt.includes('jpeg') || rawExt.includes('jpg') ? 'jpg' : rawExt.includes('webp') ? 'webp' : 'png';
+          const buffer = Buffer.from(matches[2], 'base64');
+          const uploadsDir = path.join(__dirname, '../../uploads');
+          if (!fs.existsSync(uploadsDir)) {
+            fs.mkdirSync(uploadsDir, { recursive: true });
+          }
+          const filename = `menu_fondo_${Date.now()}.${ext}`;
+          const filepath = path.join(uploadsDir, filename);
+          fs.writeFileSync(filepath, buffer);
+          imagenFinal = `/uploads/${filename}`;
+        }
+      } catch (errArchivo) {
+        console.warn('Advertencia al escribir imagen en disco, guardando en BD:', errArchivo);
+      }
+    } else if (typeof imagenFinal === 'string' && imagenFinal.includes('/uploads/')) {
+      // Si ya era una URL guardada en uploads pero incluía el dominio (ej. http://localhost:3000/uploads/...)
+      const idx = imagenFinal.indexOf('/uploads/');
+      imagenFinal = imagenFinal.substring(idx);
+    }
+
+    const configBloquesStr = typeof config_bloques === 'object' ? JSON.stringify(config_bloques) : config_bloques;
+
+    const [existentes] = await db.query(
+      `SELECT id FROM menu_diseno WHERE nombre = 'default' LIMIT 1`
+    );
+
+    if (existentes.length > 0) {
+      await db.query(
+        `UPDATE menu_diseno SET imagen_fondo = ?, config_bloques = ? WHERE id = ?`,
+        [imagenFinal !== undefined ? imagenFinal : null, configBloquesStr || null, existentes[0].id]
+      );
+    } else {
+      await db.query(
+        `INSERT INTO menu_diseno (nombre, imagen_fondo, config_bloques) VALUES ('default', ?, ?)`,
+        [imagenFinal !== undefined ? imagenFinal : null, configBloquesStr || null]
+      );
+    }
+
+    return res.json({
+      ok: true,
+      mensaje: 'Diseño del menú guardado exitosamente',
+      imagen_fondo: imagenFinal,
+    });
+  } catch (error) {
+    console.error('Error al guardar diseño del menú:', error);
+    return res.status(500).json({ error: error.message || 'Error al guardar diseño del menú' });
+  }
+};
+
 module.exports = {
   getAlimentos,
   getAlimentosPorCategoria,
@@ -289,4 +416,6 @@ module.exports = {
   actualizarAlimento,
   guardarMenuDelDia,
   actualizarPreciosMasivo,
+  getMenuDiseno,
+  guardarMenuDiseno,
 };

@@ -26,7 +26,7 @@ const obtenerZonaAlimento = async (item) => {
         const catZona = (rows[0].zona || '').toLowerCase();
         const catTipo = (rows[0].tipo || '').toLowerCase();
         if (['cocina', 'comal', 'barra'].includes(catZona)) return catZona;
-        if (['desayuno', 'comida', 'platos fuertes', 'entrada', 'guarnicion', 'torta'].includes(catTipo)) return 'cocina';
+        if (['desayuno', 'comida', 'platos fuertes', 'entrada', 'guarnicion', 'torta', 'otros', 'otro'].includes(catTipo)) return 'cocina';
         if (['antojito'].includes(catTipo)) return 'comal';
         if (['bebida', 'postre', 'litros', 'litro'].includes(catTipo)) return 'barra';
       }
@@ -94,11 +94,26 @@ const crearPedido = async (req, res) => {
 
   try {
     // Asegurar que la tabla alimentos_pedidos tenga las columnas necesarias
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN guarnicion1 VARCHAR(150) DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN guarnicion2 VARCHAR(150) DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN entrada VARCHAR(150) DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN bebida VARCHAR(150) DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN guiso VARCHAR(150) DEFAULT NULL'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN personalizado BOOLEAN DEFAULT FALSE'); } catch (e) {}
+
+    // Backfill para pedidos que no tengan id_alimento asignado
+    try {
+      await db.query(`
+        UPDATE alimentos_pedidos ap
+        INNER JOIN alimentos a ON (
+          LOWER(a.nombre) = LOWER(REGEXP_REPLACE(ap.alimento, '-(barra|comal|cocina)$', ''))
+          OR LOWER(a.nombre) = LOWER(TRIM(REGEXP_REPLACE(REGEXP_REPLACE(ap.alimento, '-(barra|comal|cocina)$', ''), '^[0-9]+x\\\\s*', '')))
+        )
+        SET ap.id_alimento = a.id
+        WHERE ap.id_alimento IS NULL
+      `);
+    } catch (e) {}
 
     // 1. Verificar si ya existe un pedido activo (estado 0 o 1) para esta mesa (comedor o para llevar 100, 101, etc.)
     const [pedidosActivos] = await db.query(
@@ -135,9 +150,30 @@ const crearPedido = async (req, res) => {
         alimentoTexto = `${alimentoTexto}-${zonaDetectada}`;
       }
 
+      // Resolver id_alimento si viene en el payload o buscarlo por nombre en el catálogo
+      let idAlimentoFinal = item.id_alimento || item.alimento_id || null;
+      if (!idAlimentoFinal && alimentoTexto) {
+        const nombreSinZona = alimentoTexto.replace(/-[a-zA-Z0-9_]+$/g, '').trim();
+        const nombreSinCantidad = nombreSinZona.replace(/^\d+x\s*/i, '').trim();
+        if (nombreSinCantidad) {
+          try {
+            const [alimRows] = await db.query(
+              `SELECT id FROM alimentos WHERE LOWER(nombre) = LOWER(?) LIMIT 1`,
+              [nombreSinCantidad]
+            );
+            if (alimRows.length > 0) {
+              idAlimentoFinal = alimRows[0].id;
+            }
+          } catch (e) {}
+        }
+      }
+
+      const esPersonalizado = item.personalizado === true || item.personalizado === 1 || item.personalizado === '1';
+
       await db.query(
-        'INSERT INTO alimentos_pedidos (costo, estado, alimento, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, comentarios, cuenta, num_orden) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO alimentos_pedidos (id_alimento, costo, estado, alimento, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, comentarios, cuenta, num_orden, personalizado) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         [
+          idAlimentoFinal,
           Number(item.costo) || 0,
           estadoInicial,
           alimentoTexto,
@@ -150,6 +186,7 @@ const crearPedido = async (req, res) => {
           item.comentarios || '',
           cuentaIdFinal,
           numOrden,
+          esPersonalizado ? 1 : 0,
         ]
       );
     }
@@ -172,10 +209,12 @@ const getAlimentosPedidoPorMesa = async (req, res) => {
   const { num_mesa } = req.params;
 
   try {
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN bloques_marcados TEXT DEFAULT NULL'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN personalizado BOOLEAN DEFAULT FALSE'); } catch (e) {}
 
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.bloques_marcados, p.num_mesa, COALESCE(c.nombre, c2.nombre, 'Mesero') as mesero
+      `SELECT ap.id, ap.id_alimento, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.bloques_marcados, ap.personalizado, p.num_mesa, COALESCE(c.nombre, c2.nombre, 'Mesero') as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
        LEFT JOIN cuentas c ON ap.cuenta = c.id
@@ -190,16 +229,20 @@ const getAlimentosPedidoPorMesa = async (req, res) => {
     console.error('Error al consultar alimentos de la mesa:', error);
     return res.status(500).json({ error: 'Error al consultar la comanda de la mesa' });
   }
-}// GET /api/pedidos/todas-las-mesas
+}
+
+// GET /api/pedidos/todas-las-mesas
 // Obtener todos los alimentos_pedidos en estado 0, 1, 2, 3 y 4 recientes de TODAS las mesas activas
 const getTodasLasMesas = async (req, res) => {
   try {
     try { await db.query('ALTER TABLE pedidos ADD COLUMN corte INT DEFAULT NULL'); } catch (e) {}
     try { await db.query("ALTER TABLE alimentos_pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN bloques_marcados TEXT DEFAULT NULL'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN personalizado BOOLEAN DEFAULT FALSE'); } catch (e) {}
 
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.metodo_pago, ap.bloques_marcados,
+      `SELECT ap.id, ap.id_alimento, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.metodo_pago, ap.bloques_marcados, ap.personalizado,
               p.num_mesa, p.fecha_pedido, p.corte, COALESCE(c.nombre, c2.nombre, 'Mesero') as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -220,21 +263,22 @@ const getTodasLasMesas = async (req, res) => {
 // Cambiar estado de un alimento_pedido (0: pendiente, 1: servido cocina, 2: servido mesa/barra/comal, 3: completado, 4: cobrado)
 const cambiarEstadoAlimentoPedido = async (req, res) => {
   const { id } = req.params;
-  const { estado, corte_id, metodo_pago } = req.body;
+  const { estado, corte_id, metodo_pago, pagos, cuenta_id, monto_recibido, cambio, referencia } = req.body;
 
   if (estado === undefined || ![0, 1, 2, 3, 4].includes(Number(estado))) {
     return res.status(400).json({ error: 'Estado inválido (Debe ser 0, 1, 2, 3 o 4)' });
   }
 
-  const metodoFinal = (metodo_pago || 'efectivo').toLowerCase();
+  let metodoFinal = (metodo_pago || 'efectivo').toLowerCase();
 
   try {
     try { await db.query("ALTER TABLE alimentos_pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
     try { await db.query("ALTER TABLE pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
 
-    const [apRows] = await db.query('SELECT num_orden FROM alimentos_pedidos WHERE id = ?', [id]);
+    const [apRows] = await db.query('SELECT num_orden, costo FROM alimentos_pedidos WHERE id = ?', [id]);
     if (apRows.length > 0) {
       const numOrden = apRows[0].num_orden;
+      const costoItem = Number(apRows[0].costo) || 0;
 
       if (Number(estado) === 2 || Number(estado) === 1) {
         await db.query('UPDATE pedidos SET estado = 1 WHERE num_orden = ? AND estado = 0', [numOrden]);
@@ -242,7 +286,56 @@ const cambiarEstadoAlimentoPedido = async (req, res) => {
 
       if (Number(estado) === 4 && corte_id) {
         try { await db.query('ALTER TABLE pedidos ADD COLUMN corte INT DEFAULT NULL'); } catch (e) {}
-        await db.query('UPDATE pedidos SET corte = ? WHERE num_orden = ?', [corte_id, numOrden]);
+
+        // Registrar transacción de pago en la tabla pagos
+        if (Array.isArray(pagos) && pagos.length > 0) {
+          metodoFinal = pagos.length > 1 ? 'mixto' : (pagos[0].metodo_pago || 'efectivo').toLowerCase();
+          for (const p of pagos) {
+            const m = Number(p.monto) || 0;
+            if (m > 0) {
+              await db.query(
+                `INSERT INTO pagos (num_orden, corte_id, monto, metodo_pago, monto_recibido, cambio, referencia, cuenta)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                  numOrden,
+                  corte_id,
+                  m,
+                  (p.metodo_pago || 'efectivo').toLowerCase(),
+                  p.monto_recibido !== undefined && p.monto_recibido !== null ? Number(p.monto_recibido) : null,
+                  Number(p.cambio) || 0,
+                  p.referencia || null,
+                  p.cuenta || cuenta_id || null,
+                ]
+              );
+            }
+          }
+        } else {
+          await db.query(
+            `INSERT INTO pagos (num_orden, corte_id, monto, metodo_pago, monto_recibido, cambio, referencia, cuenta)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+            [
+              numOrden,
+              corte_id,
+              costoItem,
+              metodoFinal,
+              monto_recibido !== undefined && monto_recibido !== null ? Number(monto_recibido) : null,
+              Number(cambio) || 0,
+              referencia || null,
+              cuenta_id || null,
+            ]
+          );
+        }
+
+        // Si todos los items de la comanda ya están cobrados (estado 4), marcar el pedido padre como cobrado
+        const [pendientes] = await db.query(
+          'SELECT COUNT(*) as restantes FROM alimentos_pedidos WHERE num_orden = ? AND estado != 4 AND id != ?',
+          [numOrden, id]
+        );
+        if (pendientes[0].restantes === 0) {
+          await db.query('UPDATE pedidos SET estado = 4, corte = ?, metodo_pago = ? WHERE num_orden = ?', [corte_id, metodoFinal, numOrden]);
+        } else {
+          await db.query('UPDATE pedidos SET corte = ? WHERE num_orden = ?', [corte_id, numOrden]);
+        }
       }
     }
 
@@ -280,7 +373,7 @@ const cambiarBloquesAlimentoPedido = async (req, res) => {
 const getBarraPendientes = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -301,7 +394,7 @@ const getBarraPendientes = async (req, res) => {
 const getBarraHistorialHoy = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -326,7 +419,7 @@ const getBarraHistorialHoy = async (req, res) => {
 const getComalPendientes = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -350,7 +443,7 @@ const getComalPendientes = async (req, res) => {
 const getComalHistorialHoy = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -378,7 +471,7 @@ const getComalHistorialHoy = async (req, res) => {
 const getCocinaPendientes = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -393,7 +486,7 @@ const getCocinaPendientes = async (req, res) => {
          AND (
            a.zona = 'cocina' 
            OR ap.alimento LIKE '%-cocina'
-           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta') 
+           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta', 'Otros', 'Otro') 
            OR (
              ap.guiso IS NULL 
              AND ap.alimento NOT LIKE '%sope%' 
@@ -442,7 +535,7 @@ const getCocinaPendientes = async (req, res) => {
 const getCocinaHistorialHoy = async (req, res) => {
   try {
     const [rows] = await db.query(
-      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden,
+      `SELECT ap.id, ap.alimento, ap.costo, ap.guarnicion1, ap.guarnicion2, ap.entrada, ap.bebida, ap.guiso, ap.extras, ap.comentarios, ap.estado, ap.num_orden, ap.personalizado,
               p.num_mesa, p.fecha_pedido, c.nombre as mesero
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
@@ -457,7 +550,7 @@ const getCocinaHistorialHoy = async (req, res) => {
          AND (
            a.zona = 'cocina' 
            OR ap.alimento LIKE '%-cocina'
-           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta') 
+           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta', 'Otros', 'Otro') 
            OR (
              ap.guiso IS NULL 
              AND ap.alimento NOT LIKE '%sope%' 
@@ -543,10 +636,10 @@ const revertirBarraItem = async (req, res) => {
 // Editar campos de un alimento_pedido y recalcular costo del pedido padre
 const editarAlimentoPedido = async (req, res) => {
   const { id } = req.params;
-  const { alimento, comentarios, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, costo, justificacion } = req.body;
+  const { alimento, id_alimento, comentarios, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, costo, justificacion } = req.body;
 
   try {
-    const [rows] = await db.query('SELECT num_orden, comentarios FROM alimentos_pedidos WHERE id = ?', [id]);
+    const [rows] = await db.query('SELECT num_orden, comentarios, id_alimento FROM alimentos_pedidos WHERE id = ?', [id]);
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Ítem de comanda no encontrado' });
     }
@@ -558,9 +651,28 @@ const editarAlimentoPedido = async (req, res) => {
       comentariosActuales = comentariosActuales ? `${comentariosActuales} ${justTexto}` : justTexto;
     }
 
+    // Resolver id_alimento si no vino explícito pero se editó el nombre del alimento
+    let idAlimentoFinal = id_alimento || null;
+    if (!idAlimentoFinal && alimento) {
+      const nombreSinZona = String(alimento).replace(/-[a-zA-Z0-9_]+$/g, '').trim();
+      const nombreSinCantidad = nombreSinZona.replace(/^\d+x\s*/i, '').trim();
+      if (nombreSinCantidad) {
+        try {
+          const [alimRows] = await db.query(
+            `SELECT id FROM alimentos WHERE LOWER(nombre) = LOWER(?) LIMIT 1`,
+            [nombreSinCantidad]
+          );
+          if (alimRows.length > 0) {
+            idAlimentoFinal = alimRows[0].id;
+          }
+        } catch (e) {}
+      }
+    }
+
     await db.query(
       `UPDATE alimentos_pedidos 
-       SET alimento = COALESCE(?, alimento),
+       SET id_alimento = COALESCE(?, id_alimento),
+           alimento = COALESCE(?, alimento),
            comentarios = ?,
            guarnicion1 = ?,
            guarnicion2 = ?,
@@ -571,6 +683,7 @@ const editarAlimentoPedido = async (req, res) => {
            costo = COALESCE(?, costo)
        WHERE id = ?`,
       [
+        idAlimentoFinal || null,
         alimento || null,
         comentariosActuales || null,
         guarnicion1 !== undefined ? guarnicion1 : null,
@@ -592,7 +705,7 @@ const editarAlimentoPedido = async (req, res) => {
     const nuevoTotal = sumRows[0].nuevo_total || 0;
     await db.query('UPDATE pedidos SET costo = ? WHERE num_orden = ?', [nuevoTotal, numOrden]);
 
-    return res.json({ ok: true, id: Number(id), nuevo_total: nuevoTotal });
+    return res.json({ ok: true, id: Number(id), id_alimento: idAlimentoFinal || rows[0].id_alimento, nuevo_total: nuevoTotal });
   } catch (error) {
     console.error('Error al editar alimento_pedido:', error);
     return res.status(500).json({ error: 'Error interno al editar el ítem' });
@@ -653,31 +766,93 @@ const cancelarAlimentoPedido = async (req, res) => {
 // Cambiar el estado de todos los alimentos_pedidos de una orden completa (ej. cobrar -> estado 4)
 const cambiarEstadoOrden = async (req, res) => {
   const { num_orden } = req.params;
-  const { estado, corte_id, metodo_pago } = req.body;
+  const { estado, corte_id, metodo_pago, pagos, cuenta_id, monto_recibido, cambio, referencia } = req.body;
 
   if (estado === undefined || ![0, 1, 2, 3, 4].includes(Number(estado))) {
     return res.status(400).json({ error: 'Estado inválido (Debe ser 0, 1, 2, 3 o 4)' });
   }
 
-  const metodoFinal = (metodo_pago || 'efectivo').toLowerCase();
+  let metodoFinal = (metodo_pago || 'efectivo').toLowerCase();
 
   try {
     try { await db.query("ALTER TABLE alimentos_pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
     try { await db.query("ALTER TABLE pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
 
-    await db.query('UPDATE alimentos_pedidos SET estado = ?, metodo_pago = ? WHERE num_orden = ?', [estado, metodoFinal, num_orden]);
-
     if (Number(estado) === 4 && corte_id) {
       try { await db.query('ALTER TABLE pedidos ADD COLUMN corte INT DEFAULT NULL'); } catch (e) {}
-      await db.query('UPDATE pedidos SET estado = ?, corte = ?, metodo_pago = ? WHERE num_orden = ?', [estado, corte_id, metodoFinal, num_orden]);
+
+      // Registrar pagos en la tabla pagos
+      if (Array.isArray(pagos) && pagos.length > 0) {
+        metodoFinal = pagos.length > 1 ? 'mixto' : (pagos[0].metodo_pago || 'efectivo').toLowerCase();
+        for (const p of pagos) {
+          const m = Number(p.monto) || 0;
+          if (m > 0) {
+            await db.query(
+              `INSERT INTO pagos (num_orden, corte_id, monto, metodo_pago, monto_recibido, cambio, referencia, cuenta)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+              [
+                num_orden,
+                corte_id,
+                m,
+                (p.metodo_pago || 'efectivo').toLowerCase(),
+                p.monto_recibido !== undefined && p.monto_recibido !== null ? Number(p.monto_recibido) : null,
+                Number(p.cambio) || 0,
+                p.referencia || null,
+                p.cuenta || cuenta_id || null,
+              ]
+            );
+          }
+        }
+      } else {
+        const [ordenRows] = await db.query('SELECT costo FROM pedidos WHERE num_orden = ?', [num_orden]);
+        const montoTotal = ordenRows.length > 0 ? Number(ordenRows[0].costo) || 0 : 0;
+        await db.query(
+          `INSERT INTO pagos (num_orden, corte_id, monto, metodo_pago, monto_recibido, cambio, referencia, cuenta)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+          [
+            num_orden,
+            corte_id,
+            montoTotal,
+            metodoFinal,
+            monto_recibido !== undefined && monto_recibido !== null ? Number(monto_recibido) : null,
+            Number(cambio) || 0,
+            referencia || null,
+            cuenta_id || null,
+          ]
+        );
+      }
+
+      await db.query('UPDATE alimentos_pedidos SET estado = 4, metodo_pago = ? WHERE num_orden = ?', [metodoFinal, num_orden]);
+      await db.query('UPDATE pedidos SET estado = 4, corte = ?, metodo_pago = ? WHERE num_orden = ?', [corte_id, metodoFinal, num_orden]);
     } else {
+      await db.query('UPDATE alimentos_pedidos SET estado = ?, metodo_pago = ? WHERE num_orden = ?', [estado, metodoFinal, num_orden]);
       await db.query('UPDATE pedidos SET estado = ?, metodo_pago = ? WHERE num_orden = ?', [estado, metodoFinal, num_orden]);
     }
 
-    return res.json({ ok: true, num_orden: Number(num_orden), nuevo_estado: Number(estado) });
+    return res.json({ ok: true, num_orden: Number(num_orden), nuevo_estado: Number(estado), metodo_pago: metodoFinal });
   } catch (error) {
     console.error('Error al actualizar estado de la orden completa:', error);
     return res.status(500).json({ error: 'Error interno al actualizar la orden' });
+  }
+};
+
+// GET /api/pedidos/orden/:num_orden/pagos
+// Obtener el historial o desglose de pagos registrados para una orden
+const getPagosPorOrden = async (req, res) => {
+  const { num_orden } = req.params;
+  try {
+    const [rows] = await db.query(
+      `SELECT p.*, c.nombre as cajero
+       FROM pagos p
+       LEFT JOIN cuentas c ON p.cuenta = c.id
+       WHERE p.num_orden = ?
+       ORDER BY p.id ASC`,
+      [num_orden]
+    );
+    return res.json({ pagos: rows });
+  } catch (error) {
+    console.error('Error al consultar pagos de la orden:', error);
+    return res.status(500).json({ error: 'Error al consultar pagos de la orden' });
   }
 };
 
@@ -845,6 +1020,36 @@ Write-Output "RESULT:READY"
 
     lines.push(divider('-'));
     lines.push(padRow('TOTAL:', `$${total.toFixed(2)}`));
+
+    let listaPagos = comanda.pagos || (opciones && opciones.pagos) || [];
+    if ((!listaPagos || listaPagos.length === 0) && comanda.num_orden) {
+      try {
+        const [rows] = await db.query('SELECT * FROM pagos WHERE num_orden = ? ORDER BY id ASC', [comanda.num_orden]);
+        if (rows && rows.length > 0) {
+          listaPagos = rows;
+        }
+      } catch (e) {}
+    }
+
+    if (Array.isArray(listaPagos) && listaPagos.length > 0) {
+      lines.push(divider('-'));
+      lines.push('FORMA DE PAGO:');
+      listaPagos.forEach((p) => {
+        const met = (p.metodo_pago || 'efectivo').toUpperCase();
+        const ref = p.referencia ? ` (${p.referencia})` : '';
+        const m = `$${Number(p.monto).toFixed(2)}`;
+        lines.push(padRow(`${met}${ref}:`, m));
+        if (p.metodo_pago === 'efectivo' && Number(p.monto_recibido) > Number(p.monto)) {
+          lines.push(`  Recibido: $${Number(p.monto_recibido).toFixed(2)}`);
+          lines.push(`  Cambio:   $${Number(p.cambio).toFixed(2)}`);
+        }
+      });
+    } else if (comanda.metodo_pago || (opciones && opciones.metodo_pago)) {
+      const met = (comanda.metodo_pago || (opciones && opciones.metodo_pago)).toUpperCase();
+      lines.push(divider('-'));
+      lines.push(padRow('METODO DE PAGO:', met));
+    }
+
     lines.push(divider('='));
     lines.push('Gracias por su preferencia!');
     lines.push('  La Cocina de Mama\r\n\r\n\r\n');
@@ -988,4 +1193,5 @@ module.exports = {
   getParaLlevarActivos,
   getSiguienteMesaParaLlevar,
   imprimirTicketDirecto,
+  getPagosPorOrden,
 };

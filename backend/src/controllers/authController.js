@@ -72,7 +72,7 @@ const register = async (req, res) => {
     return res.status(400).json({ error: 'Nombre, contraseña y tipo de cuenta son requeridos' });
   }
 
-  const tiposValidos = ['superadmin', 'admin', 'mesero', 'barra', 'cocina', 'comal'];
+  const tiposValidos = ['superadmin', 'admin', 'mesero', 'barra', 'cocina', 'comal', 'desarrollador'];
   if (!tiposValidos.includes(tipo)) {
     return res.status(400).json({ error: `El tipo debe ser uno de: ${tiposValidos.join(', ')}` });
   }

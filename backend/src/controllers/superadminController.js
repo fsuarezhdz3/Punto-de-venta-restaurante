@@ -34,36 +34,81 @@ const getDashboardStats = async (req, res) => {
 
     const totalComandas = Number(totalesRows[0]?.total_comandas) || 0;
     const totalVentas = Number(totalesRows[0]?.total_ventas) || 0;
-    const totalEfectivo = Number(totalesRows[0]?.total_efectivo) || 0;
-    const totalTarjeta = Number(totalesRows[0]?.total_tarjeta) || 0;
-    const totalTransferencia = Number(totalesRows[0]?.total_transferencia) || 0;
+    let totalEfectivo = Number(totalesRows[0]?.total_efectivo) || 0;
+    let totalTarjeta = Number(totalesRows[0]?.total_tarjeta) || 0;
+    let totalTransferencia = Number(totalesRows[0]?.total_transferencia) || 0;
 
-    // 2. Platillos más vendidos (Ranking completo y Top 5)
+    // Obtener desglose de métodos de pago desde pagos para precisión exacta con cobros mixtos
+    try {
+      let wherePagos = `WHERE 1=1`;
+      const pagosParams = [];
+      if (desde) {
+        wherePagos += ` AND p.fecha_pedido >= ?`;
+        pagosParams.push(`${desde} 00:00:00`);
+      }
+      if (hasta) {
+        wherePagos += ` AND p.fecha_pedido <= ?`;
+        pagosParams.push(`${hasta} 23:59:59`);
+      }
+
+      const [pagosTotals] = await db.query(
+        `SELECT 
+          COALESCE(SUM(CASE WHEN LOWER(pg.metodo_pago) = 'efectivo' THEN pg.monto ELSE 0 END), 0) as total_efectivo,
+          COALESCE(SUM(CASE WHEN LOWER(pg.metodo_pago) = 'tarjeta' THEN pg.monto ELSE 0 END), 0) as total_tarjeta,
+          COALESCE(SUM(CASE WHEN LOWER(pg.metodo_pago) = 'transferencia' THEN pg.monto ELSE 0 END), 0) as total_transferencia,
+          COUNT(pg.id) as total_pagos
+         FROM pagos pg
+         INNER JOIN pedidos p ON pg.num_orden = p.num_orden
+         ${wherePagos}`,
+        pagosParams
+      );
+
+      if (pagosTotals.length > 0 && Number(pagosTotals[0].total_pagos) > 0) {
+        totalEfectivo = Number(pagosTotals[0].total_efectivo) || 0;
+        totalTarjeta = Number(pagosTotals[0].total_tarjeta) || 0;
+        totalTransferencia = Number(pagosTotals[0].total_transferencia) || 0;
+      }
+    } catch (pErr) {}
+
+    // 2. Platillos más vendidos (Ranking consolidado por id_alimento y Top 5)
     const [platilloRows] = await db.query(
-      `SELECT ap.alimento, COUNT(*) as cantidad, SUM(ap.costo) as total, COALESCE(a.tipo, 'Otro') as tipo
+      `SELECT 
+         COALESCE(ap.id_alimento, a.id) as id_alimento,
+         COALESCE(a.nombre, ap.alimento) as nombre_alimento,
+         ap.alimento as alimento_raw,
+         COUNT(*) as cantidad,
+         SUM(ap.costo) as total,
+         COALESCE(a.tipo, 'Otro') as tipo
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
-       LEFT JOIN alimentos a ON (ap.alimento = a.nombre OR ap.alimento LIKE CONCAT(a.nombre, '-%'))
+       LEFT JOIN alimentos a ON (
+         ap.id_alimento = a.id 
+         OR ap.alimento = a.nombre 
+         OR ap.alimento LIKE CONCAT(a.nombre, '-%')
+       )
        ${whereClause}
-       GROUP BY ap.alimento, a.tipo
+       GROUP BY COALESCE(ap.id_alimento, a.id), COALESCE(a.nombre, ap.alimento), ap.alimento, a.tipo
        ORDER BY cantidad DESC, total DESC`,
       queryParams
     );
 
     const rankingMap = {};
     platilloRows.forEach((row) => {
-      let rawNombre = row.alimento || '';
-      let cleanNombre = rawNombre.replace(/-(barra|comal|cocina)$/i, '').trim();
-      if (!rankingMap[cleanNombre]) {
-        rankingMap[cleanNombre] = {
+      let rawNombre = row.nombre_alimento || row.alimento_raw || '';
+      let cleanNombre = rawNombre.replace(/-(barra|comal|cocina)$/i, '').replace(/^\d+x\s*/i, '').trim();
+      const mapKey = row.id_alimento ? `id_${row.id_alimento}` : `nom_${cleanNombre.toLowerCase()}`;
+
+      if (!rankingMap[mapKey]) {
+        rankingMap[mapKey] = {
+          id_alimento: row.id_alimento || null,
           alimento: cleanNombre,
           cantidad: 0,
           total: 0,
           tipo: row.tipo || 'Otro'
         };
       }
-      rankingMap[cleanNombre].cantidad += Number(row.cantidad) || 0;
-      rankingMap[cleanNombre].total += Number(row.total) || 0;
+      rankingMap[mapKey].cantidad += Number(row.cantidad) || 0;
+      rankingMap[mapKey].total += Number(row.total) || 0;
     });
 
     const rankingPlatillos = Object.values(rankingMap).sort((a, b) => b.cantidad - a.cantidad || b.total - a.total);
@@ -138,22 +183,41 @@ const getCortesHistorial = async (req, res) => {
         let totalTransferencia = 0;
 
         try {
-          const [vRows] = await db.query(
+          const [pagosRows] = await db.query(
             `SELECT 
-              SUM(ap.costo) as total_ventas,
-              SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo,
-              SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'tarjeta' THEN ap.costo ELSE 0 END) as total_tarjeta,
-              SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'transferencia' THEN ap.costo ELSE 0 END) as total_transferencia
-             FROM alimentos_pedidos ap
-             INNER JOIN pedidos p ON ap.num_orden = p.num_orden
-             WHERE p.corte = ? AND ap.estado = 4`,
+              COALESCE(SUM(monto), 0) as total_ventas,
+              COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'efectivo' THEN monto ELSE 0 END), 0) as total_efectivo,
+              COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'tarjeta' THEN monto ELSE 0 END), 0) as total_tarjeta,
+              COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'transferencia' THEN monto ELSE 0 END), 0) as total_transferencia,
+              COUNT(*) as total_pagos
+             FROM pagos
+             WHERE corte_id = ?`,
             [corte.id]
           );
-          if (vRows.length > 0) {
-            totalVentas = Number(vRows[0].total_ventas) || 0;
-            totalEfectivo = Number(vRows[0].total_efectivo) || 0;
-            totalTarjeta = Number(vRows[0].total_tarjeta) || 0;
-            totalTransferencia = Number(vRows[0].total_transferencia) || 0;
+
+          if (pagosRows.length > 0 && Number(pagosRows[0].total_pagos) > 0) {
+            totalVentas = Number(pagosRows[0].total_ventas) || 0;
+            totalEfectivo = Number(pagosRows[0].total_efectivo) || 0;
+            totalTarjeta = Number(pagosRows[0].total_tarjeta) || 0;
+            totalTransferencia = Number(pagosRows[0].total_transferencia) || 0;
+          } else {
+            const [vRows] = await db.query(
+              `SELECT 
+                SUM(ap.costo) as total_ventas,
+                SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo,
+                SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'tarjeta' THEN ap.costo ELSE 0 END) as total_tarjeta,
+                SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'transferencia' THEN ap.costo ELSE 0 END) as total_transferencia
+               FROM alimentos_pedidos ap
+               INNER JOIN pedidos p ON ap.num_orden = p.num_orden
+               WHERE p.corte = ? AND ap.estado = 4`,
+              [corte.id]
+            );
+            if (vRows.length > 0) {
+              totalVentas = Number(vRows[0].total_ventas) || 0;
+              totalEfectivo = Number(vRows[0].total_efectivo) || 0;
+              totalTarjeta = Number(vRows[0].total_tarjeta) || 0;
+              totalTransferencia = Number(vRows[0].total_transferencia) || 0;
+            }
           }
         } catch (e) {}
 

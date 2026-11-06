@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS cuentas (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nombre VARCHAR(100) NOT NULL UNIQUE,
     contrasena VARCHAR(255) NOT NULL,
-    tipo VARCHAR(20) NOT NULL,                  -- superadmin, admin, mesero, barra, cocina, comal
+    tipo VARCHAR(20) NOT NULL,                  -- superadmin, admin, mesero, barra, cocina, comal, desarrollador
     intentos INT NOT NULL DEFAULT 0,
     bloqueo BOOLEAN NOT NULL DEFAULT FALSE,
     estado BOOLEAN NOT NULL DEFAULT TRUE        -- Si la cuenta esta activa o no 
@@ -23,8 +23,12 @@ CREATE TABLE IF NOT EXISTS cuentas (
 CREATE TABLE IF NOT EXISTS alimentos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nombre VARCHAR(200) NOT NULL,
-    tipo VARCHAR(15) NOT NULL,                 -- Comida, Desayuno, Antojito, Bebida, Torta, Postre, Entrada, Guarnicion, Extra
-    precio INT NOT NULL,
+    tipo VARCHAR(15) NOT NULL,                 -- Comida, Desayuno, Antojito, Bebida, Torta, Postre, Entrada, Guarnicion, Extra, Otros
+    precio DECIMAL(10,2) NOT NULL,
+    precio_paquete DECIMAL(10,2) NULL DEFAULT NULL,
+    precio_antojito DECIMAL(10,2) NULL DEFAULT NULL,
+    aplica_paquete TINYINT(1) NOT NULL DEFAULT 1,
+    aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1,
     zona ENUM('barra', 'cocina', 'comal') NOT NULL DEFAULT 'cocina', -- Zonas de preparación
     estado BOOLEAN NOT NULL DEFAULT TRUE
 );
@@ -58,13 +62,14 @@ CREATE TABLE IF NOT EXISTS pedidos (
     num_orden INT PRIMARY KEY AUTO_INCREMENT,
     costo DECIMAL(10,2) NOT NULL DEFAULT 0.00,
     num_mesa INT NOT NULL,
-    estado INT NOT NULL DEFAULT 0,              -- 0: recién creado, 1: servido primer platillo, 2: completado y cobrado
+    estado INT NOT NULL DEFAULT 0,              -- 0: recién creado, 1: servido primer platillo, 2: completado, 4: cobrado
     fecha_pedido DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_completado DATETIME,
     metodo_pago VARCHAR(20),                  -- efectivo, tarjeta, transferencia, mixto
     comentarios VARCHAR(200),                 -- Aclaraciones al cobrar
     cuenta INT,	                              -- Cuenta del mesero que sirvió el primer platillo
     factura INT,
+    corte INT DEFAULT NULL,                   -- Corte de caja al que pertenece
     FOREIGN KEY (cuenta) REFERENCES cuentas(id) ON DELETE SET NULL,
     FOREIGN KEY (factura) REFERENCES facturas(folio) ON DELETE SET NULL
 );
@@ -77,8 +82,9 @@ ALTER TABLE facturas ADD CONSTRAINT fk_facturas_pedidos FOREIGN KEY (num_orden) 
 -- =============================================
 CREATE TABLE IF NOT EXISTS alimentos_pedidos (
     id INT PRIMARY KEY AUTO_INCREMENT, 
+    id_alimento INT DEFAULT NULL,                -- Relación al catálogo maestro de alimentos
     costo DECIMAL(10,2) NOT NULL,
-    estado INT NOT NULL DEFAULT 0,              -- 0: enviado a cocina, 1: servido, 2: entregado al cliente
+    estado INT NOT NULL DEFAULT 0,              -- 0: enviado a cocina, 1: servido, 2: entregado al cliente, 4: cobrado
     alimento VARCHAR(100) NOT NULL,
     guarnicion1 VARCHAR(150) DEFAULT NULL,       -- Guarnición 1 para paquetes
     guarnicion2 VARCHAR(150) DEFAULT NULL,       -- Guarnición 2 para paquetes
@@ -89,6 +95,10 @@ CREATE TABLE IF NOT EXISTS alimentos_pedidos (
     comentarios VARCHAR(300),
     cuenta INT NOT NULL,                        -- cuenta de quien pidió este ítem específico
     num_orden INT NOT NULL,
+    metodo_pago VARCHAR(50) DEFAULT 'efectivo',
+    bloques_marcados TEXT DEFAULT NULL,
+    personalizado BOOLEAN DEFAULT FALSE,
+    FOREIGN KEY (id_alimento) REFERENCES alimentos(id) ON DELETE SET NULL,
     FOREIGN KEY (num_orden) REFERENCES pedidos(num_orden) ON DELETE CASCADE,
     FOREIGN KEY (cuenta) REFERENCES cuentas(id)
 );
@@ -106,13 +116,16 @@ CREATE TABLE IF NOT EXISTS cortes (
     FOREIGN KEY (cuenta) REFERENCES cuentas(id)
 );
 
+-- Agregar FK de corte en pedidos una vez creada la tabla cortes
+ALTER TABLE pedidos ADD CONSTRAINT fk_pedidos_cortes FOREIGN KEY (corte) REFERENCES cortes(id) ON DELETE SET NULL;
+
 -- =============================================
 -- TABLA: ingresos
 -- =============================================
 CREATE TABLE IF NOT EXISTS ingresos (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    total_ingreso INT NOT NULL,
-    concepto VARCHAR(100) NOT NULL,
+    total_ingreso DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    concepto VARCHAR(255) NOT NULL,
     fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     corte_id INT NOT NULL,
     FOREIGN KEY (corte_id) REFERENCES cortes(id) ON DELETE CASCADE
@@ -123,11 +136,31 @@ CREATE TABLE IF NOT EXISTS ingresos (
 -- =============================================
 CREATE TABLE IF NOT EXISTS egresos (
     id INT PRIMARY KEY AUTO_INCREMENT,
-    total_ingreso INT NOT NULL,
-    concepto VARCHAR(100) NOT NULL,
+    total_egreso DECIMAL(10,2) NOT NULL DEFAULT 0.00,
+    total_ingreso INT NOT NULL DEFAULT 0,
+    concepto VARCHAR(255) NOT NULL,
     fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     corte_id INT NOT NULL,
     FOREIGN KEY (corte_id) REFERENCES cortes(id) ON DELETE CASCADE
+);
+
+-- =============================================
+-- TABLA: pagos (Transacciones financieras de pago por orden)
+-- =============================================
+CREATE TABLE IF NOT EXISTS pagos (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    num_orden INT NOT NULL,
+    corte_id INT NOT NULL,
+    monto DECIMAL(10,2) NOT NULL,
+    metodo_pago VARCHAR(50) NOT NULL,
+    monto_recibido DECIMAL(10,2) NULL,
+    cambio DECIMAL(10,2) DEFAULT 0.00,
+    referencia VARCHAR(100) NULL,
+    cuenta INT NULL,
+    fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (num_orden) REFERENCES pedidos(num_orden) ON DELETE CASCADE,
+    FOREIGN KEY (corte_id) REFERENCES cortes(id) ON DELETE CASCADE,
+    FOREIGN KEY (cuenta) REFERENCES cuentas(id) ON DELETE SET NULL
 );
 
 -- =============================================
@@ -141,6 +174,17 @@ CREATE TABLE IF NOT EXISTS facturas_detalle (
     precio_unitario DECIMAL(10,2) NOT NULL,
     importe DECIMAL(10,2) NOT NULL,
     FOREIGN KEY (folio_factura) REFERENCES facturas(folio) ON DELETE CASCADE
+);
+
+-- =============================================
+-- TABLA: menu_diseno (Plantilla y diseño guardado del Menú del Día)
+-- =============================================
+CREATE TABLE IF NOT EXISTS menu_diseno (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(50) NOT NULL DEFAULT 'default',
+    imagen_fondo LONGTEXT NULL,
+    config_bloques LONGTEXT NULL,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 );
 
 -- =============================================

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -13,6 +13,7 @@ import {
   Switch,
   useWindowDimensions,
   Platform,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -21,6 +22,7 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
 import ModalTicketPreview from '../../components/ModalTicketPreview';
+import ModalGeneradorMenu from '../../components/ModalGeneradorMenu';
 
 // Helper para remover sufijo de zona en la UI
 const limpiarZona = (str = '') => {
@@ -31,7 +33,8 @@ const limpiarZona = (str = '') => {
 export default function AdminHomeScreen() {
   const { user, logout } = useContext(AuthContext);
   const { width = 1000 } = useWindowDimensions() || {};
-  const isDesktop = Platform.OS === 'web' || width >= 768;
+  const isDesktop = width >= 768;
+  const isMobile = width < 768;
   const [activeTab, setActiveTab] = useState('comandas'); // 'comandas' | 'alimentos' | 'historial' | 'corte'
 
   // Modal Ticket Preview
@@ -39,8 +42,25 @@ export default function AdminHomeScreen() {
   const [ticketComandaSeleccionada, setTicketComandaSeleccionada] = useState(null);
   const [ticketOpcionesCobro, setTicketOpcionesCobro] = useState({});
 
-  const abrirTicketModal = (ord, opciones = {}) => {
-    setTicketComandaSeleccionada(ord);
+  // Modal Diseñador de Imagen del Menú del Día
+  const [modalGeneradorVisible, setModalGeneradorVisible] = useState(false);
+
+  const abrirTicketModal = async (ord, opciones = {}) => {
+    let comandaConPagos = { ...ord };
+    if (ord && ord.num_orden && (!ord.pagos || ord.pagos.length === 0)) {
+      try {
+        const res = await fetch(`${API_URL}/pedidos/orden/${ord.num_orden}/pagos`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.pagos && data.pagos.length > 0) {
+            comandaConPagos.pagos = data.pagos;
+          }
+        }
+      } catch (e) {
+        console.log('Error fetching pagos for ticket modal:', e);
+      }
+    }
+    setTicketComandaSeleccionada(comandaConPagos);
     setTicketOpcionesCobro(opciones);
     setModalTicketVisible(true);
   };
@@ -75,9 +95,16 @@ export default function AdminHomeScreen() {
   const [cobroModalVisible, setCobroModalVisible] = useState(false);
   const [ordenACobrar, setOrdenACobrar] = useState(null);
   const [tipoCobro, setTipoCobro] = useState('toda'); // 'toda' | 'separado'
-  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo' | 'tarjeta' | 'transferencia'
+  const [metodoPago, setMetodoPago] = useState('efectivo'); // 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto'
   const [montoPaga, setMontoPaga] = useState('');
   const [itemsSeleccionadosCobro, setItemsSeleccionadosCobro] = useState({});
+
+  // Estado para Pagos Mixtos / Divididos
+  const [listaPagosMixtos, setListaPagosMixtos] = useState([]);
+  const [abonoMetodo, setAbonoMetodo] = useState('tarjeta');
+  const [abonoMonto, setAbonoMonto] = useState('');
+  const [abonoMontoRecibido, setAbonoMontoRecibido] = useState('');
+  const [abonoReferencia, setAbonoReferencia] = useState('');
 
   // Estado Modal de Justificación de Edición/Eliminación al Cobrar
   const [modalJustificacionVisible, setModalJustificacionVisible] = useState(false);
@@ -126,6 +153,10 @@ export default function AdminHomeScreen() {
   // Estado para búsqueda e inclusión interactiva en el Menú del Día
   const [busquedaMenuDia, setBusquedaMenuDia] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
+  const [searchCatalogoFocused, setSearchCatalogoFocused] = useState(false);
+  const searchMenuDiaRef = useRef(null);
+  const searchCatalogoRef = useRef(null);
   const [comidasSeleccionadasMenuDia, setComidasSeleccionadasMenuDia] = useState({});
 
   // Modal Crear / Editar Alimento
@@ -256,6 +287,11 @@ export default function AdminHomeScreen() {
     setTipoCobro('toda');
     setMetodoPago('efectivo');
     setMontoPaga('');
+    setListaPagosMixtos([]);
+    setAbonoMetodo('tarjeta');
+    setAbonoMonto('');
+    setAbonoMontoRecibido('');
+    setAbonoReferencia('');
 
     const initialMap = {};
     ordenGroup.items.forEach((item) => {
@@ -278,8 +314,16 @@ export default function AdminHomeScreen() {
     setMetodoPago(metodo);
     if (metodo === 'tarjeta' || metodo === 'transferencia') {
       setMontoPaga(String(calcularTotalModalActual()));
-    } else {
+    } else if (metodo === 'efectivo') {
       setMontoPaga('');
+    } else if (metodo === 'mixto') {
+      setMontoPaga('');
+      const total = calcularTotalModalActual();
+      const abonado = listaPagosMixtos.reduce((acc, p) => acc + Number(p.monto), 0);
+      const restante = Math.max(0, total - abonado);
+      if (restante > 0 && !abonoMonto) {
+        setAbonoMonto(String(restante));
+      }
     }
   };
 
@@ -297,6 +341,52 @@ export default function AdminHomeScreen() {
     }
   };
 
+  const handleAgregarAbonoMixto = () => {
+    const totalActual = calcularTotalModalActual();
+    const abonadoActual = listaPagosMixtos.reduce((sum, p) => sum + Number(p.monto), 0);
+    const faltante = Math.max(0, totalActual - abonadoActual);
+
+    const montoNum = Number(abonoMonto) > 0 ? Number(abonoMonto) : faltante;
+    if (montoNum <= 0) {
+      Alert.alert('Monto Inválido', 'Ingresa una cantidad mayor a 0 para el abono.');
+      return;
+    }
+    if (montoNum > faltante + 0.01) {
+      Alert.alert('Monto Excede Restante', `El monto máximo a cubrir es de $${faltante.toFixed(2)}.`);
+      return;
+    }
+
+    const recibidoNum = abonoMetodo === 'efectivo' ? (Number(abonoMontoRecibido) || montoNum) : montoNum;
+    if (abonoMetodo === 'efectivo' && recibidoNum < montoNum) {
+      Alert.alert('Monto Recibido Insuficiente', 'El dinero recibido no puede ser menor al monto a pagar.');
+      return;
+    }
+
+    const cambioAbono = abonoMetodo === 'efectivo' ? Math.max(0, recibidoNum - montoNum) : 0;
+
+    const nuevoAbono = {
+      id: Date.now() + Math.random(),
+      metodo_pago: abonoMetodo,
+      monto: montoNum,
+      monto_recibido: recibidoNum,
+      cambio: cambioAbono,
+      referencia: abonoReferencia.trim(),
+    };
+
+    const nuevaLista = [...listaPagosMixtos, nuevoAbono];
+    setListaPagosMixtos(nuevaLista);
+
+    const nuevoAbonado = nuevaLista.reduce((sum, p) => sum + Number(p.monto), 0);
+    const nuevoFaltante = Math.max(0, totalActual - nuevoAbonado);
+    setAbonoMonto(nuevoFaltante > 0 ? String(nuevoFaltante) : '');
+    setAbonoMontoRecibido('');
+    setAbonoReferencia('');
+  };
+
+  const handleRemoverAbonoMixto = (index) => {
+    setListaPagosMixtos((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const handleConfirmarCobro = async () => {
     if (!ordenACobrar || !corteActivo) return;
     const totalACobrar = calcularTotalModalActual();
@@ -306,27 +396,67 @@ export default function AdminHomeScreen() {
       return;
     }
 
-    const pagaNum = metodoPago === 'efectivo' ? Number(montoPaga) || 0 : totalACobrar;
+    let pagosPayload = [];
 
-    if (metodoPago === 'efectivo' && pagaNum < totalACobrar) {
-      Alert.alert('Monto insuficiente', `El monto recibido ($${pagaNum}.00) es menor al total a cobrar ($${totalACobrar}.00).`);
-      return;
+    if (metodoPago === 'mixto') {
+      const abonado = listaPagosMixtos.reduce((sum, p) => sum + Number(p.monto), 0);
+      if (Math.abs(abonado - totalACobrar) > 0.01) {
+        Alert.alert(
+          'Total Incompleto ⚠️',
+          `Debes cubrir el 100% de la comanda ($${totalACobrar.toFixed(2)}). Actualmente llevas abonado $${abonado.toFixed(2)}.`
+        );
+        return;
+      }
+      pagosPayload = listaPagosMixtos.map((p) => ({
+        metodo_pago: p.metodo_pago,
+        monto: Number(p.monto),
+        monto_recibido: p.monto_recibido,
+        cambio: p.cambio,
+        referencia: p.referencia,
+      }));
+    } else if (metodoPago === 'efectivo') {
+      const pagaNum = Number(montoPaga) || 0;
+      if (pagaNum < totalACobrar) {
+        Alert.alert('Monto insuficiente', `El monto recibido ($${pagaNum}.00) es menor al total a cobrar ($${totalACobrar}.00).`);
+        return;
+      }
+      const cambio = Math.max(0, pagaNum - totalACobrar);
+      pagosPayload = [
+        {
+          metodo_pago: 'efectivo',
+          monto: totalACobrar,
+          monto_recibido: pagaNum,
+          cambio: cambio,
+        },
+      ];
+    } else {
+      pagosPayload = [
+        {
+          metodo_pago: metodoPago,
+          monto: totalACobrar,
+          monto_recibido: totalACobrar,
+          cambio: 0,
+        },
+      ];
     }
-
-    const cambio = metodoPago === 'efectivo' ? Math.max(0, pagaNum - totalACobrar) : 0;
 
     try {
       if (tipoCobro === 'toda') {
         const res = await fetch(`${API_URL}/pedidos/orden/${ordenACobrar.num_orden}/estado`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ estado: 4, corte_id: corteActivo.id, metodo_pago: metodoPago }),
+          body: JSON.stringify({
+            estado: 4,
+            corte_id: corteActivo.id,
+            metodo_pago: metodoPago,
+            pagos: pagosPayload,
+          }),
         });
 
         if (res.ok) {
           Alert.alert(
             '¡Cobro Exitoso! ✅',
-            `Orden #${ordenACobrar.num_orden} cobrada por completo ($${totalACobrar}.00).\nMétodo: ${metodoPago.toUpperCase()}\nCambio: $${cambio.toFixed(2)}`
+            `Orden #${ordenACobrar.num_orden} cobrada por completo ($${totalACobrar.toFixed(2)}).\nMétodo: ${metodoPago.toUpperCase()}`
           );
           setCobroModalVisible(false);
           setOrdenACobrar(null);
@@ -343,14 +473,19 @@ export default function AdminHomeScreen() {
             fetch(`${API_URL}/pedidos/alimento-pedido/${id}/estado`, {
               method: 'PUT',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ estado: 4, corte_id: corteActivo.id, metodo_pago: metodoPago }),
+              body: JSON.stringify({
+                estado: 4,
+                corte_id: corteActivo.id,
+                metodo_pago: metodoPago,
+                pagos: pagosPayload,
+              }),
             })
           )
         );
 
         Alert.alert(
           '¡Cobro Parcial Exitoso! ✅',
-          `Se cobraron ${idsAEstado4.length} ítems por separado ($${totalACobrar}.00).\nMétodo: ${metodoPago.toUpperCase()}\nCambio: $${cambio.toFixed(2)}\nLos demás ítems siguen pendientes por cobrar.`
+          `Se cobraron ${idsAEstado4.length} ítems por separado ($${totalACobrar.toFixed(2)}).\nMétodo: ${metodoPago.toUpperCase()}\nLos demás ítems siguen pendientes por cobrar.`
         );
 
         setCobroModalVisible(false);
@@ -403,6 +538,7 @@ export default function AdminHomeScreen() {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            id_alimento: item.id_alimento || null,
             alimento: editItemAlimento,
             costo: Number(editItemCosto) || 0,
             comentarios: editItemComentarios,
@@ -885,22 +1021,30 @@ export default function AdminHomeScreen() {
     }));
   };
 
-  // Limpiar completamente el Menú del Día
+  // Limpiar platillos del Menú del Día cambiando el valor booleano según el filtro seleccionado
   const handleLimpiarMenuDia = () => {
-    Alert.alert(
-      'Limpiar Menú del Día',
-      '¿Estás seguro de vaciar la lista del Menú del Día?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        {
-          text: 'Sí, Vaciar',
-          style: 'destructive',
-          onPress: () => {
-            setComidasSeleccionadasMenuDia({});
-          },
-        },
-      ]
-    );
+    setComidasSeleccionadasMenuDia((prev) => {
+      const nuevo = { ...prev };
+      const itemsMenuDia = alimentosCat.filter((a) => esTipoMenuDia(a.tipo));
+
+      if (!catFiltroMenuDia || catFiltroMenuDia === 'Todas') {
+        // Si el filtro es Todas, cambiar el valor booleano a false en todos los platillos
+        itemsMenuDia.forEach((item) => {
+          nuevo[item.id] = false;
+        });
+        Object.keys(prev).forEach((id) => {
+          nuevo[id] = false;
+        });
+      } else {
+        // Cambiar el valor booleano a false sólo para los platillos que pertenecen al filtro seleccionado
+        itemsMenuDia
+          .filter((item) => perteneceACategoriaMenuDia(item, catFiltroMenuDia))
+          .forEach((item) => {
+            nuevo[item.id] = false;
+          });
+      }
+      return nuevo;
+    });
   };
 
   // Guardar cambios del Menú del Día en backend
@@ -1165,11 +1309,22 @@ export default function AdminHomeScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.historialCardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text style={styles.historialOrdenTitle}>Orden #{ord.num_orden}</Text>
                         <View style={styles.mesaBadgePill}>
                           <Text style={styles.mesaBadgePillText}>
                             {Number(ord.num_mesa) >= 100 ? 'Para llevar #' + ord.num_mesa : 'Mesa #' + ord.num_mesa}
+                          </Text>
+                        </View>
+                        <View style={[styles.corteBadgePill, ord.corte ? styles.corteBadgePillActivo : styles.corteBadgePillSinCorte]}>
+                          <Ionicons
+                            name="receipt-outline"
+                            size={11}
+                            color={ord.corte ? '#6D28D9' : '#64748B'}
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text style={[styles.corteBadgePillText, ord.corte ? styles.corteBadgePillTextActivo : styles.corteBadgePillTextSinCorte]}>
+                            {ord.corte ? `Corte #${ord.corte}` : 'Sin corte'}
                           </Text>
                         </View>
                       </View>
@@ -1324,13 +1479,26 @@ export default function AdminHomeScreen() {
     });
 
     const alimentosFiltradosCat = alimentosCat.filter((a) => {
+      // 1. Filtro por buscador
+      if (busquedaCatalogo.trim().length > 0) {
+        const query = busquedaCatalogo.trim().toLowerCase();
+        const coincide =
+          (a.nombre || '').toLowerCase().includes(query) ||
+          (a.tipo || '').toLowerCase().includes(query) ||
+          (a.zona || '').toLowerCase().includes(query);
+        if (!coincide) return false;
+      }
+
+      // 2. Filtro por categoría seleccionada
       if (catFiltroMenu === 'Todas') return true;
       const catFilterLower = catFiltroMenu.toLowerCase();
       const aTipoLower = (a.tipo || '').toLowerCase();
+      if ((catFilterLower === 'guarniciones' || catFilterLower === 'guarnicion') && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
       if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
       if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
       if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
       if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+      if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
       return aTipoLower === catFilterLower;
     });
 
@@ -1344,10 +1512,10 @@ export default function AdminHomeScreen() {
           <View>
             <Text style={styles.sectionTitle}>
               {vistaMenuModo === 'menu_dia_ver'
-                ? 'Menú del Día (Vigente)'
+                ? 'Menú del Día'
                 : vistaMenuModo === 'menu_dia_editar'
                 ? 'Editar Menú del Día'
-                : 'Editar Alimentos (Catálogo Global)'}
+                : 'Editar Alimentos'}
             </Text>
             <Text style={styles.sectionSub}>
               {vistaMenuModo === 'menu_dia_ver'
@@ -1421,16 +1589,38 @@ export default function AdminHomeScreen() {
         {/* SUB-VISTA 1: VER MENÚ DEL DÍA */}
         {vistaMenuModo === 'menu_dia_ver' && (
           <View>
-            <View style={styles.menuDiaVerHeaderRow}>
+            <View style={[styles.menuDiaVerHeaderRow, isMobile && styles.menuDiaVerHeaderRowMobile]}>
               <Text style={styles.menuDiaVerTitle}>Platillos del Menú de Hoy:</Text>
-              <TouchableOpacity
-                style={styles.btnBotonEntrarEditarMenu}
-                onPress={() => setVistaMenuModo('menu_dia_editar')}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="pencil-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.btnBotonEntrarEditarMenuText}>Editar Menú del Día</Text>
-              </TouchableOpacity>
+              <View style={[styles.menuDiaVerActions, isMobile && styles.menuDiaVerActionsMobile]}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnBotonEntrarEditarMenu,
+                    { backgroundColor: '#0284C7' },
+                    isMobile && styles.btnBotonEntrarEditarMenuMobile
+                  ]}
+                  onPress={() => setModalGeneradorVisible(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="color-palette-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.btnBotonEntrarEditarMenuText, isMobile && styles.btnBotonEntrarEditarMenuTextMobile]}>
+                    Diseñar Imagen
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.btnBotonEntrarEditarMenu,
+                    isMobile && styles.btnBotonEntrarEditarMenuMobile
+                  ]}
+                  onPress={() => setVistaMenuModo('menu_dia_editar')}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="pencil-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.btnBotonEntrarEditarMenuText, isMobile && styles.btnBotonEntrarEditarMenuTextMobile]}>
+                    Editar Menú del Día
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* SELECTOR DE CATEGORÍAS DEL MENÚ DEL DÍA */}
@@ -1525,11 +1715,16 @@ export default function AdminHomeScreen() {
             </ScrollView>
 
             <View style={styles.searchAndCleanBarRow}>
-              <View style={styles.searchBoxInputContainer}>
+              <Pressable
+                style={[styles.searchBoxInputContainer, searchFocused && styles.searchBoxInputContainerFocused]}
+                onPress={() => searchMenuDiaRef.current?.focus()}
+              >
                 <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
                 <TextInput
+                  ref={searchMenuDiaRef}
                   style={styles.searchBoxInput}
                   placeholder={catFiltroMenuDia === 'Todas' ? 'Buscar platillo para agregar...' : `Buscar en ${catFiltroMenuDia}...`}
+                  placeholderTextColor="#94A3B8"
                   value={busquedaMenuDia}
                   onChangeText={setBusquedaMenuDia}
                   onFocus={() => setSearchFocused(true)}
@@ -1538,11 +1733,11 @@ export default function AdminHomeScreen() {
                   }}
                 />
                 {busquedaMenuDia.length > 0 && (
-                  <TouchableOpacity onPress={() => setBusquedaMenuDia('')}>
+                  <TouchableOpacity onPress={() => setBusquedaMenuDia('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close-circle" size={18} color="#64748B" />
                   </TouchableOpacity>
                 )}
-              </View>
+              </Pressable>
 
               <TouchableOpacity
                 style={styles.btnLimpiarMenu}
@@ -1550,7 +1745,9 @@ export default function AdminHomeScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="trash-outline" size={16} color="#DC2626" style={{ marginRight: 4 }} />
-                <Text style={styles.btnLimpiarMenuText}>Limpiar Todo</Text>
+                <Text style={styles.btnLimpiarMenuText}>
+                  {catFiltroMenuDia === 'Todas' ? 'Limpiar Todo' : `Limpiar ${catFiltroMenuDia}`}
+                </Text>
               </TouchableOpacity>
             </View>
 
@@ -1655,7 +1852,7 @@ export default function AdminHomeScreen() {
           <View>
             <View style={styles.catalogoHeaderRow}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catFiltrosScroll}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postres', 'Tortas', 'Extras'].map((cat) => (
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catFiltroChip, catFiltroMenu === cat && styles.catFiltroChipActive]}
@@ -1687,6 +1884,31 @@ export default function AdminHomeScreen() {
                   <Text style={styles.btnNuevoAlimentoSmallText}>+ Nuevo Alimento</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+
+            {/* BUSCADOR DE ALIMENTOS EN CATÁLOGO */}
+            <View style={[styles.searchAndCleanBarRow, { marginBottom: 16 }]}>
+              <Pressable
+                style={[styles.searchBoxInputContainer, searchCatalogoFocused && styles.searchBoxInputContainerFocused]}
+                onPress={() => searchCatalogoRef.current?.focus()}
+              >
+                <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
+                <TextInput
+                  ref={searchCatalogoRef}
+                  style={styles.searchBoxInput}
+                  placeholder={catFiltroMenu === 'Todas' ? 'Buscar alimento por nombre o categoría...' : `Buscar en ${catFiltroMenu}...`}
+                  placeholderTextColor="#94A3B8"
+                  value={busquedaCatalogo}
+                  onChangeText={setBusquedaCatalogo}
+                  onFocus={() => setSearchCatalogoFocused(true)}
+                  onBlur={() => setSearchCatalogoFocused(false)}
+                />
+                {busquedaCatalogo.length > 0 && (
+                  <TouchableOpacity onPress={() => setBusquedaCatalogo('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close-circle" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                )}
+              </Pressable>
             </View>
 
             {loadingAlimentos && !refreshing ? (
@@ -1927,6 +2149,8 @@ export default function AdminHomeScreen() {
   const totalModalCalculado = calcularTotalModalActual();
   const pagaNumModal = metodoPago === 'efectivo' ? Number(montoPaga) || 0 : totalModalCalculado;
   const cambioModal = metodoPago === 'efectivo' ? Math.max(0, pagaNumModal - totalModalCalculado) : 0;
+  const totalAbonadoMixto = listaPagosMixtos.reduce((acc, p) => acc + Number(p.monto || 0), 0);
+  const restanteMixto = Math.max(0, totalModalCalculado - totalAbonadoMixto);
 
   const navItems = [
     { key: 'comandas', label: 'Comandas', iconActive: 'restaurant', iconInactive: 'restaurant-outline' },
@@ -2456,9 +2680,9 @@ export default function AdminHomeScreen() {
               >
                 <Ionicons
                   name="cash-outline"
-                  size={18}
+                  size={16}
                   color={metodoPago === 'efectivo' ? '#FFFFFF' : '#475569'}
-                  style={{ marginRight: 4 }}
+                  style={{ marginRight: 3 }}
                 />
                 <Text style={[styles.btnMetodoPagoText, metodoPago === 'efectivo' && styles.btnMetodoPagoTextActive]}>
                   Efectivo
@@ -2472,9 +2696,9 @@ export default function AdminHomeScreen() {
               >
                 <Ionicons
                   name="card-outline"
-                  size={18}
+                  size={16}
                   color={metodoPago === 'tarjeta' ? '#FFFFFF' : '#475569'}
-                  style={{ marginRight: 4 }}
+                  style={{ marginRight: 3 }}
                 />
                 <Text style={[styles.btnMetodoPagoText, metodoPago === 'tarjeta' && styles.btnMetodoPagoTextActive]}>
                   Tarjeta
@@ -2488,12 +2712,28 @@ export default function AdminHomeScreen() {
               >
                 <Ionicons
                   name="qr-code-outline"
-                  size={18}
+                  size={16}
                   color={metodoPago === 'transferencia' ? '#FFFFFF' : '#475569'}
-                  style={{ marginRight: 4 }}
+                  style={{ marginRight: 3 }}
                 />
                 <Text style={[styles.btnMetodoPagoText, metodoPago === 'transferencia' && styles.btnMetodoPagoTextActive]}>
                   Transf.
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.btnMetodoPago, metodoPago === 'mixto' && styles.btnMetodoPagoActive]}
+                onPress={() => handleCambiarMetodoPago('mixto')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name="pie-chart-outline"
+                  size={16}
+                  color={metodoPago === 'mixto' ? '#FFFFFF' : '#475569'}
+                  style={{ marginRight: 3 }}
+                />
+                <Text style={[styles.btnMetodoPagoText, metodoPago === 'mixto' && styles.btnMetodoPagoTextActive]}>
+                  Mixto
                 </Text>
               </TouchableOpacity>
             </View>
@@ -2519,14 +2759,173 @@ export default function AdminHomeScreen() {
               </>
             )}
 
+            {metodoPago === 'mixto' && (
+              <View style={styles.mixtoContainer}>
+                {/* Resumen de cobertura */}
+                <View style={styles.mixtoResumenRow}>
+                  <View style={styles.mixtoResumenCol}>
+                    <Text style={styles.mixtoResumenSub}>Total</Text>
+                    <Text style={styles.mixtoResumenVal}>${totalModalCalculado.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.mixtoResumenCol}>
+                    <Text style={styles.mixtoResumenSub}>Abonado</Text>
+                    <Text style={[styles.mixtoResumenVal, { color: '#0D9488' }]}>${totalAbonadoMixto.toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.mixtoResumenCol}>
+                    <Text style={styles.mixtoResumenSub}>Restante</Text>
+                    <Text style={[styles.mixtoResumenVal, { color: restanteMixto > 0 ? '#DC2626' : '#059669' }]}>
+                      ${restanteMixto.toFixed(2)}
+                    </Text>
+                  </View>
+                </View>
+
+                {/* Formulario para registrar un abono */}
+                {restanteMixto > 0 ? (
+                  <View style={styles.mixtoFormBox}>
+                    <Text style={styles.mixtoFormTitle}>Registrar Abono:</Text>
+                    <View style={styles.mixtoMetodoSelectorRow}>
+                      {[
+                        { id: 'efectivo', label: 'Efectivo', icon: 'cash-outline' },
+                        { id: 'tarjeta', label: 'Tarjeta', icon: 'card-outline' },
+                        { id: 'transferencia', label: 'Transf.', icon: 'qr-code-outline' },
+                      ].map((m) => (
+                        <TouchableOpacity
+                          key={m.id}
+                          style={[styles.mixtoChip, abonoMetodo === m.id && styles.mixtoChipActive]}
+                          onPress={() => {
+                            setAbonoMetodo(m.id);
+                            if (m.id !== 'efectivo') setAbonoMontoRecibido('');
+                          }}
+                          activeOpacity={0.8}
+                        >
+                          <Ionicons
+                            name={m.icon}
+                            size={13}
+                            color={abonoMetodo === m.id ? '#FFFFFF' : '#475569'}
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text style={[styles.mixtoChipText, abonoMetodo === m.id && styles.mixtoChipTextActive]}>
+                            {m.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+
+                    <View style={{ flexDirection: 'row', gap: 6 }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.mixtoInputLabel}>Monto a Cubrir ($):</Text>
+                        <TextInput
+                          style={styles.mixtoInput}
+                          keyboardType="numeric"
+                          placeholder={restanteMixto > 0 ? String(restanteMixto) : '0.00'}
+                          placeholderTextColor="#94A3B8"
+                          value={abonoMonto}
+                          onChangeText={setAbonoMonto}
+                        />
+                      </View>
+                      {abonoMetodo === 'efectivo' && (
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.mixtoInputLabel}>Paga con ($):</Text>
+                          <TextInput
+                            style={styles.mixtoInput}
+                            keyboardType="numeric"
+                            placeholder="0.00"
+                            placeholderTextColor="#94A3B8"
+                            value={abonoMontoRecibido}
+                            onChangeText={setAbonoMontoRecibido}
+                          />
+                        </View>
+                      )}
+                    </View>
+
+                    {abonoMetodo === 'efectivo' &&
+                      Number(abonoMontoRecibido) > Number(abonoMonto || restanteMixto) && (
+                        <Text style={styles.mixtoCambioText}>
+                          Cambio: ${(Number(abonoMontoRecibido) - Number(abonoMonto || restanteMixto)).toFixed(2)}
+                        </Text>
+                      )}
+
+                    {(abonoMetodo === 'tarjeta' || abonoMetodo === 'transferencia') && (
+                      <View style={{ marginTop: 4 }}>
+                        <Text style={styles.mixtoInputLabel}>Ref. / Voucher (opcional):</Text>
+                        <TextInput
+                          style={styles.mixtoInput}
+                          placeholder="Ej. Auth 1234, BBVA, etc."
+                          placeholderTextColor="#94A3B8"
+                          value={abonoReferencia}
+                          onChangeText={setAbonoReferencia}
+                        />
+                      </View>
+                    )}
+
+                    <TouchableOpacity
+                      style={styles.btnAgregarAbono}
+                      onPress={handleAgregarAbonoMixto}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                      <Text style={styles.btnAgregarAbonoText}>+ Agregar Abono</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  <View style={styles.mixtoCompletadoBox}>
+                    <Ionicons name="checkmark-circle" size={18} color="#059669" style={{ marginRight: 6 }} />
+                    <Text style={styles.mixtoCompletadoText}>Cuenta 100% cubierta y lista para cobrar.</Text>
+                  </View>
+                )}
+
+                {/* Lista de abonos registrados */}
+                {listaPagosMixtos.length > 0 && (
+                  <View style={styles.mixtoListaBox}>
+                    <Text style={styles.mixtoListaTitle}>Desglose de Pagos Registrados:</Text>
+                    {listaPagosMixtos.map((p, index) => (
+                      <View key={index} style={styles.mixtoPagoRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.mixtoPagoMetodo}>
+                            {p.metodo_pago === 'efectivo'
+                              ? '💵 Efectivo'
+                              : p.metodo_pago === 'tarjeta'
+                              ? '💳 Tarjeta'
+                              : '📲 Transferencia'}
+                            {p.referencia ? ` (${p.referencia})` : ''}
+                          </Text>
+                          {p.metodo_pago === 'efectivo' && Number(p.monto_recibido) > Number(p.monto) && (
+                            <Text style={styles.mixtoPagoSub}>
+                              Recibió: ${Number(p.monto_recibido).toFixed(2)} • Cambio: ${Number(p.cambio).toFixed(2)}
+                            </Text>
+                          )}
+                        </View>
+                        <Text style={styles.mixtoPagoMonto}>${Number(p.monto).toFixed(2)}</Text>
+                        <TouchableOpacity
+                          onPress={() => handleRemoverAbonoMixto(index)}
+                          style={styles.btnEliminarAbono}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons name="trash-outline" size={15} color="#DC2626" />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+            )}
+
             <TouchableOpacity
-              style={styles.btnConfirmarCobroModal}
+              style={[
+                styles.btnConfirmarCobroModal,
+                metodoPago === 'mixto' && restanteMixto > 0 && { backgroundColor: '#94A3B8', opacity: 0.7 },
+              ]}
               onPress={handleConfirmarCobro}
               activeOpacity={0.85}
+              disabled={metodoPago === 'mixto' && restanteMixto > 0}
             >
               <Ionicons name="checkmark-done-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
               <Text style={styles.btnConfirmarCobroText}>
-                {tipoCobro === 'toda' ? 'Confirmar Cobro Total' : 'Cobrar Ítems Seleccionados'}
+                {metodoPago === 'mixto' && restanteMixto > 0
+                  ? `Faltan $${restanteMixto.toFixed(2)} por cubrir`
+                  : tipoCobro === 'toda'
+                  ? 'Confirmar Cobro Total'
+                  : 'Cobrar Ítems Seleccionados'}
               </Text>
             </TouchableOpacity>
           </View>
@@ -2690,7 +3089,7 @@ export default function AdminHomeScreen() {
 
               <Text style={styles.inputPagaLabel}>Categoría / Tipo:</Text>
               <View style={styles.opcionesFormRow}>
-                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra'].map((cat) => (
+                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.btnFormChip, formTipo === cat && styles.btnFormChipActive]}
@@ -2800,7 +3199,7 @@ export default function AdminHomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.inputPagaLabel}>1. Selecciona la Categoría:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postres', 'Tortas', 'Extras'].map((cat) => (
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catFiltroChip, catFiltroMasivo === cat && styles.catFiltroChipActive]}
@@ -2814,6 +3213,7 @@ export default function AdminHomeScreen() {
                         if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
                         if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
                         if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+                        if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
                         return aTipoLower === catFilterLower;
                       });
                       const map = {};
@@ -3098,6 +3498,13 @@ export default function AdminHomeScreen() {
         comanda={ticketComandaSeleccionada}
         opcionesCobro={ticketOpcionesCobro}
         onClose={() => setModalTicketVisible(false)}
+      />
+
+      {/* MODAL GENERADOR DE IMAGEN DEL MENÚ DEL DÍA */}
+      <ModalGeneradorMenu
+        visible={modalGeneradorVisible}
+        onClose={() => setModalGeneradorVisible(false)}
+        alimentosCat={alimentosCat}
       />
     </SafeAreaView>
   );
@@ -3539,6 +3946,32 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#1E40AF',
   },
+  corteBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  corteBadgePillActivo: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  corteBadgePillSinCorte: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  corteBadgePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  corteBadgePillTextActivo: {
+    color: '#6D28D9',
+  },
+  corteBadgePillTextSinCorte: {
+    color: '#64748B',
+  },
   historialMetaRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -3773,6 +4206,7 @@ const styles = StyleSheet.create({
     padding: 20,
     width: '100%',
     maxWidth: 440,
+    maxHeight: '92%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
@@ -4075,6 +4509,178 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
 
+  /* ESTILOS PARA COBRO MIXTO / COMBINADO */
+  mixtoContainer: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    borderRadius: 12,
+    padding: 10,
+    marginBottom: 12,
+    gap: 8,
+  },
+  mixtoResumenRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mixtoResumenCol: {
+    alignItems: 'center',
+    flex: 1,
+  },
+  mixtoResumenSub: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#64748B',
+    textTransform: 'uppercase',
+  },
+  mixtoResumenVal: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0F172A',
+    marginTop: 2,
+  },
+  mixtoFormBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 10,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  mixtoFormTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#0F766E',
+    marginBottom: 6,
+    textTransform: 'uppercase',
+  },
+  mixtoMetodoSelectorRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 6,
+  },
+  mixtoChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  mixtoChipActive: {
+    backgroundColor: '#0D9488',
+    borderColor: '#0D9488',
+  },
+  mixtoChipText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#475569',
+  },
+  mixtoChipTextActive: {
+    color: '#FFFFFF',
+  },
+  mixtoInputLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: '#475569',
+    marginBottom: 2,
+  },
+  mixtoInput: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mixtoCambioText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#059669',
+    marginTop: 4,
+  },
+  btnAgregarAbono: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D9488',
+    borderRadius: 8,
+    paddingVertical: 7,
+    marginTop: 8,
+  },
+  btnAgregarAbonoText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  mixtoCompletadoBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#ECFDF5',
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    borderRadius: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  mixtoCompletadoText: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#059669',
+  },
+  mixtoListaBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  mixtoListaTitle: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#334155',
+    marginBottom: 6,
+  },
+  mixtoPagoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  mixtoPagoMetodo: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  mixtoPagoSub: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 1,
+  },
+  mixtoPagoMonto: {
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#0D9488',
+    marginRight: 8,
+  },
+  btnEliminarAbono: {
+    padding: 4,
+  },
+
   /* GESTIÓN DE MENÚ STYLES */
   menuActionsRow: {
     flexDirection: 'row',
@@ -4139,23 +4745,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  menuDiaVerHeaderRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   menuDiaVerTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
+  menuDiaVerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuDiaVerActionsMobile: {
+    width: '100%',
+    flexWrap: 'wrap',
+  },
   btnBotonEntrarEditarMenu: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0D9488',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
+  btnBotonEntrarEditarMenuMobile: {
+    flex: 1,
+    minWidth: 140,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+  },
   btnBotonEntrarEditarMenuText: {
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  btnBotonEntrarEditarMenuTextMobile: {
+    fontSize: 12,
   },
   menuDiaVerListContainer: {
     gap: 10,
@@ -4193,17 +4823,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#99F6E4',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: 48,
+    cursor: 'text',
+  },
+  searchBoxInputContainerFocused: {
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchBoxInput: {
     flex: 1,
-    fontSize: 13,
+    height: '100%',
+    alignSelf: 'stretch',
+    paddingVertical: 0,
+    fontSize: 14,
     fontWeight: '600',
     color: '#0F172A',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
   },
   btnLimpiarMenu: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext, useCallback } from 'react';
+import React, { useState, useEffect, useContext, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -14,6 +14,7 @@ import {
   Switch,
   Platform,
   useWindowDimensions,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -22,6 +23,8 @@ import { StatusBar } from 'expo-status-bar';
 import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
 import ModalTicketPreview from '../../components/ModalTicketPreview';
+import ModalGeneradorMenu from '../../components/ModalGeneradorMenu';
+import ModalCalendarioRango from '../../components/ModalCalendarioRango';
 
 // Helper para limpiar sufijos de zonas (-cocina, -comal, -bar)
 const limpiarZona = (str = '') => {
@@ -32,15 +35,34 @@ const limpiarZona = (str = '') => {
 export default function SuperAdminHomeScreen() {
   const { user, logout } = useContext(AuthContext);
   const { width = 1000 } = useWindowDimensions() || {};
-  const isDesktop = Platform.OS === 'web' || width >= 768;
+  const isDesktop = width >= 768;
+  const isMobile = width < 768;
+  const isDev = user?.tipo?.toLowerCase() === 'desarrollador';
 
   // Modal Ticket Preview
   const [modalTicketVisible, setModalTicketVisible] = useState(false);
   const [ticketComandaSeleccionada, setTicketComandaSeleccionada] = useState(null);
   const [ticketOpcionesCobro, setTicketOpcionesCobro] = useState({});
 
-  const abrirTicketModal = (ord, opciones = {}) => {
-    setTicketComandaSeleccionada(ord);
+  // Modal Diseñador de Imagen del Menú del Día
+  const [modalGeneradorVisible, setModalGeneradorVisible] = useState(false);
+
+  const abrirTicketModal = async (ord, opciones = {}) => {
+    let comandaConPagos = { ...ord };
+    if (ord && ord.num_orden && (!ord.pagos || ord.pagos.length === 0)) {
+      try {
+        const res = await fetch(`${API_URL}/pedidos/orden/${ord.num_orden}/pagos`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.pagos && data.pagos.length > 0) {
+            comandaConPagos.pagos = data.pagos;
+          }
+        }
+      } catch (e) {
+        console.log('Error fetching pagos for ticket modal:', e);
+      }
+    }
+    setTicketComandaSeleccionada(comandaConPagos);
     setTicketOpcionesCobro(opciones);
     setModalTicketVisible(true);
   };
@@ -111,6 +133,25 @@ export default function SuperAdminHomeScreen() {
   const [formCuentaTipo, setFormCuentaTipo] = useState('mesero');
   const [formCuentaError, setFormCuentaError] = useState('');
 
+  // Estado para el Modal de Calendario Interactivo de Rango de Fechas
+  const [calendarioModal, setCalendarioModal] = useState({
+    visible: false,
+    desde: '',
+    hasta: '',
+    modo: 'desde',
+    onAplicar: null,
+  });
+
+  const abrirCalendario = (desdeVal, hastaVal, modo = 'desde', callbackAplicar) => {
+    setCalendarioModal({
+      visible: true,
+      desde: desdeVal || '',
+      hasta: hastaVal || '',
+      modo,
+      onAplicar: callbackAplicar,
+    });
+  };
+
   // ==========================================
   // ESTADOS MENÚ / ALIMENTOS Y MENÚ DEL DÍA
   // ==========================================
@@ -121,6 +162,10 @@ export default function SuperAdminHomeScreen() {
   const [catFiltroMenuDia, setCatFiltroMenuDia] = useState('Todas'); // 'Todas' | 'Desayunos' | 'Comida' | 'Entradas' | 'Aguas' | 'Guarniciones' | 'Postres'
   const [busquedaMenuDia, setBusquedaMenuDia] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
+  const [busquedaCatalogo, setBusquedaCatalogo] = useState('');
+  const [searchCatalogoFocused, setSearchCatalogoFocused] = useState(false);
+  const searchMenuDiaRef = useRef(null);
+  const searchCatalogoRef = useRef(null);
 
   // Helper para verificar si un tipo pertenece al menú del día configurable
   const esTipoMenuDia = (tipoStr = '') => {
@@ -155,11 +200,26 @@ export default function SuperAdminHomeScreen() {
   const [formNombre, setFormNombre] = useState('');
   const [formTipo, setFormTipo] = useState('Comida');
   const [formPrecio, setFormPrecio] = useState('');
+  const [formPrecioPaquete, setFormPrecioPaquete] = useState('');
+  const [formPrecioAntojito, setFormPrecioAntojito] = useState('');
   const [formZona, setFormZona] = useState('cocina');
   const [formEstado, setFormEstado] = useState(true);
   const [formAplicaPaquete, setFormAplicaPaquete] = useState(true);
   const [formAplicaPaqueteAntojito, setFormAplicaPaqueteAntojito] = useState(true);
   const [formError, setFormError] = useState('');
+
+  // Modal Edición Masiva de Precios (Editar Varios)
+  const [modalMasivoVisible, setModalMasivoVisible] = useState(false);
+  const [catFiltroMasivo, setCatFiltroMasivo] = useState('Todas');
+  const [selectedIdsMasivo, setSelectedIdsMasivo] = useState({});
+  const [modificarPrecioRegular, setModificarPrecioRegular] = useState(false);
+  const [nuevoPrecioRegular, setNuevoPrecioRegular] = useState('');
+  const [modificarPrecioPaquete, setModificarPrecioPaquete] = useState(false);
+  const [nuevoPrecioPaquete, setNuevoPrecioPaquete] = useState('');
+  const [modificarPrecioAntojito, setModificarPrecioAntojito] = useState(false);
+  const [nuevoPrecioAntojito, setNuevoPrecioAntojito] = useState('');
+  const [modificarEstadoMasivo, setModificarEstadoMasivo] = useState(false);
+  const [nuevoEstadoMasivo, setNuevoEstadoMasivo] = useState(1);
 
   // ==========================================
   // ESTADOS HISTORIAL VENTAS POR DÍA
@@ -172,6 +232,58 @@ export default function SuperAdminHomeScreen() {
       ...prev,
       [numOrden]: !prev[numOrden],
     }));
+  };
+
+  // ==========================================
+  // ESTADOS LOGS Y REGISTRO DE ERRORES
+  // ==========================================
+  const [archivosLogs, setArchivosLogs] = useState([]);
+  const [archivoLogSeleccionado, setArchivoLogSeleccionado] = useState('');
+  const [contenidoLog, setContenidoLog] = useState('');
+  const [cargandoLogs, setCargandoLogs] = useState(false);
+
+  const cargarLogs = useCallback(async (nombreArchivo = null) => {
+    setCargandoLogs(true);
+    try {
+      const url = nombreArchivo ? `${API_URL}/logs?archivo=${nombreArchivo}` : `${API_URL}/logs`;
+      const res = await fetch(url);
+      if (res.ok) {
+        const data = await res.json();
+        setArchivosLogs(data.archivos || []);
+        setArchivoLogSeleccionado(data.archivoActual || '');
+        setContenidoLog(data.contenido || 'No hay registros de errores.');
+      }
+    } catch (e) {
+      console.log('Error al cargar logs:', e);
+      setContenidoLog('Error de red al consultar registros de error.');
+    } finally {
+      setCargandoLogs(false);
+    }
+  }, []);
+
+  const limpiarLogsHandler = () => {
+    Alert.alert(
+      'Limpiar Registros',
+      '¿Estás seguro de que deseas vaciar los registros de error del sistema?',
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Limpiar',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              const res = await fetch(`${API_URL}/logs`, { method: 'DELETE' });
+              if (res.ok) {
+                await cargarLogs();
+                Alert.alert('Éxito', 'Registros de error limpiados correctamente.');
+              }
+            } catch (e) {
+              Alert.alert('Error', 'No se pudieron limpiar los logs.');
+            }
+          },
+        },
+      ]
+    );
   };
 
   // ==========================================
@@ -253,7 +365,7 @@ export default function SuperAdminHomeScreen() {
     if (modalRankingVisible) {
       cargarPlatillosRankingModal();
     }
-  }, [modalRankingVisible, filtroPresetRanking, cargarPlatillosRankingModal]);
+  }, [modalRankingVisible, filtroPresetRanking, fechaDesdeRanking, fechaHastaRanking, cargarPlatillosRankingModal]);
 
   // ==========================================
   // CARGA DE DATOS SEGÚN PESTAÑA ACTIVA
@@ -360,9 +472,15 @@ export default function SuperAdminHomeScreen() {
       await cargarCatalogoAlimentos();
     } else if (activeTab === 'historial') {
       await cargarHistorialVentas();
+    } else if (activeTab === 'logs') {
+      if (isDev) {
+        await cargarLogs();
+      } else {
+        setActiveTab('dashboard');
+      }
     }
     setLoading(false);
-  }, [activeTab, cargarDashboardStats, cargarCortes, cargarHistorialVentas]);
+  }, [activeTab, isDev, cargarDashboardStats, cargarCortes, cargarHistorialVentas, cargarLogs]);
 
   useEffect(() => {
     cargarDatosPestana();
@@ -380,6 +498,16 @@ export default function SuperAdminHomeScreen() {
     setFechaHastaHistorial(fechaStr);
     setFiltroPresetHistorial('custom');
     setActiveTab('historial');
+  };
+
+  // Abrir modal de Ranking sincronizando con los filtros actuales del Dashboard
+  const abrirModalRanking = () => {
+    setFiltroPresetRanking(filtroPresetStats);
+    setFechaDesdeRanking(fechaDesdeStats);
+    setFechaHastaRanking(fechaHastaStats);
+    setCategoriaFiltroRanking('Todos');
+    setRankingIndependiente(null);
+    setModalRankingVisible(true);
   };
 
   // ==========================================
@@ -525,6 +653,8 @@ export default function SuperAdminHomeScreen() {
     setFormNombre('');
     setFormTipo('Comida');
     setFormPrecio('');
+    setFormPrecioPaquete('');
+    setFormPrecioAntojito('');
     setFormZona('cocina');
     setFormEstado(true);
     setFormAplicaPaquete(true);
@@ -538,6 +668,8 @@ export default function SuperAdminHomeScreen() {
     setFormNombre(item.nombre || '');
     setFormTipo(item.tipo || 'Comida');
     setFormPrecio(String(item.precio || ''));
+    setFormPrecioPaquete(item.precio_paquete !== null && item.precio_paquete !== undefined ? String(item.precio_paquete) : '');
+    setFormPrecioAntojito(item.precio_antojito !== null && item.precio_antojito !== undefined ? String(item.precio_antojito) : '');
     setFormZona(item.zona || 'cocina');
     setFormEstado(Number(item.estado) === 1);
     setFormAplicaPaquete(item.aplica_paquete !== undefined && item.aplica_paquete !== null ? Number(item.aplica_paquete) === 1 : true);
@@ -562,6 +694,8 @@ export default function SuperAdminHomeScreen() {
       nombre: formNombre.trim(),
       tipo: formTipo,
       precio: Number(formPrecio),
+      precio_paquete: formPrecioPaquete.trim() !== '' ? Number(formPrecioPaquete) : null,
+      precio_antojito: formPrecioAntojito.trim() !== '' ? Number(formPrecioAntojito) : null,
       zona: formZona,
       estado: formEstado ? 1 : 0,
       aplica_paquete: formAplicaPaquete ? 1 : 0,
@@ -594,6 +728,104 @@ export default function SuperAdminHomeScreen() {
       }
     } catch (e) {
       Alert.alert('Error', 'No se pudo guardar el alimento.');
+    }
+  };
+
+  // ==========================================
+  // OPERACIONES EDICIÓN MASIVA (EDITAR VARIOS)
+  // ==========================================
+  const abrirModalEdicionMasiva = () => {
+    const catInicial = catFiltroMenu || 'Todas';
+    setCatFiltroMasivo(catInicial);
+
+    const initialSelected = {};
+    const itemsCategorizados = catalogoAlimentos.filter((a) => {
+      if (catInicial === 'Todas') return true;
+      const catFilterLower = catInicial.toLowerCase();
+      const aTipoLower = (a.tipo || '').toLowerCase();
+      if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
+      if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
+      if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+      if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
+      if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+      return aTipoLower === catFilterLower;
+    });
+    itemsCategorizados.forEach((i) => { initialSelected[i.id] = true; });
+
+    setSelectedIdsMasivo(initialSelected);
+    setModificarPrecioRegular(false);
+    setNuevoPrecioRegular('');
+    setModificarPrecioPaquete(false);
+    setNuevoPrecioPaquete('');
+    setModificarPrecioAntojito(false);
+    setNuevoPrecioAntojito('');
+    setModificarEstadoMasivo(false);
+    setNuevoEstadoMasivo(1);
+    setModalMasivoVisible(true);
+  };
+
+  const toggleSelectMasivo = (id) => {
+    setSelectedIdsMasivo((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
+
+  const seleccionarTodosMasivo = (itemsList) => {
+    const newSelected = { ...selectedIdsMasivo };
+    itemsList.forEach((item) => { newSelected[item.id] = true; });
+    setSelectedIdsMasivo(newSelected);
+  };
+
+  const deseleccionarTodosMasivo = (itemsList) => {
+    const newSelected = { ...selectedIdsMasivo };
+    itemsList.forEach((item) => { newSelected[item.id] = false; });
+    setSelectedIdsMasivo(newSelected);
+  };
+
+  const handleGuardarPreciosMasivo = async () => {
+    const idsAActualizar = Object.keys(selectedIdsMasivo).filter((id) => selectedIdsMasivo[id]).map(Number);
+
+    if (idsAActualizar.length === 0) {
+      Alert.alert('Atención', 'Debes seleccionar al menos un alimento de la lista para modificar.');
+      return;
+    }
+
+    if (!modificarPrecioRegular && !modificarPrecioPaquete && !modificarPrecioAntojito && !modificarEstadoMasivo) {
+      Alert.alert('Atención', 'Debes activar al menos una casilla (Precio o Estado) a modificar.');
+      return;
+    }
+
+    const payload = {
+      ids: idsAActualizar,
+      modificar_precio: modificarPrecioRegular,
+      nuevo_precio: nuevoPrecioRegular,
+      modificar_precio_paquete: modificarPrecioPaquete,
+      nuevo_precio_paquete: nuevoPrecioPaquete,
+      modificar_precio_antojito: modificarPrecioAntojito,
+      nuevo_precio_antojito: nuevoPrecioAntojito,
+      modificar_estado: modificarEstadoMasivo,
+      nuevo_estado: nuevoEstadoMasivo,
+    };
+
+    try {
+      const res = await fetch(`${API_URL}/alimentos/bulk-update-precios`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+
+      if (res.ok && data.ok) {
+        Alert.alert('✅ Alimentos Actualizados', data.mensaje || `Se modificaron ${idsAActualizar.length} alimentos.`);
+        setModalMasivoVisible(false);
+        cargarCatalogoAlimentos();
+      } else {
+        Alert.alert('Error', data.error || 'No se pudieron actualizar los alimentos.');
+      }
+    } catch (e) {
+      Alert.alert('Error de conexión', 'No se pudo conectar con el servidor.');
     }
   };
 
@@ -776,21 +1008,27 @@ export default function SuperAdminHomeScreen() {
           <TouchableOpacity
             style={[styles.presetChip, presetVal === 'custom' && styles.presetChipActive]}
             onPress={() => {
-              if (!desdeVal || !hastaVal) {
+              let dDesde = desdeVal;
+              let dHasta = hastaVal;
+              if (!dDesde || !dHasta) {
                 const today = new Date();
                 const year = today.getFullYear();
                 const month = String(today.getMonth() + 1).padStart(2, '0');
                 const day = String(today.getDate()).padStart(2, '0');
-                const todayStr = `${year}-${month}-${day}`;
-                const dMes = new Date(today.getFullYear(), today.getMonth(), 1);
-                const dMesStr = `${dMes.getFullYear()}-${String(dMes.getMonth() + 1).padStart(2, '0')}-01`;
-                setDesdeVal(dMesStr);
-                setHastaVal(todayStr);
+                dHasta = `${year}-${month}-${day}`;
+                dDesde = `${year}-${month}-01`;
+                setDesdeVal(dDesde);
+                setHastaVal(dHasta);
               }
               setPresetVal('custom');
+              abrirCalendario(dDesde, dHasta, 'desde', (nDesde, nHasta) => {
+                setDesdeVal(nDesde);
+                setHastaVal(nHasta);
+                if (onAplicarCustom) onAplicarCustom();
+              });
             }}
           >
-            <Ionicons name="options-outline" size={13} color={presetVal === 'custom' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
+            <Ionicons name="calendar-outline" size={13} color={presetVal === 'custom' ? '#FFFFFF' : '#475569'} style={{ marginRight: 4 }} />
             <Text style={[styles.presetChipText, presetVal === 'custom' && styles.presetChipTextActive]}>Rango Personalizado</Text>
           </TouchableOpacity>
         </ScrollView>
@@ -798,66 +1036,57 @@ export default function SuperAdminHomeScreen() {
         {/* PANEL DE SELECCIÓN DE RANGO DE FECHAS PERSONALIZADO */}
         {presetVal === 'custom' && (
           <View style={styles.customDateBox}>
-            <Text style={styles.customDateTitle}>Seleccionar Rango de Fechas Específico:</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, flexWrap: 'wrap', gap: 8 }}>
+              <Text style={styles.customDateTitle}>Seleccionar Rango de Fechas con Calendario:</Text>
+              <TouchableOpacity
+                style={styles.btnAbrirCalendarioPill}
+                onPress={() => abrirCalendario(desdeVal, hastaVal, 'desde', (nDesde, nHasta) => {
+                  setDesdeVal(nDesde);
+                  setHastaVal(nHasta);
+                  if (onAplicarCustom) onAplicarCustom();
+                })}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="calendar" size={13} color="#0D9488" style={{ marginRight: 5 }} />
+                <Text style={styles.btnAbrirCalendarioPillText}>Abrir Calendario</Text>
+              </TouchableOpacity>
+            </View>
+
             <View style={styles.customDateInputsRow}>
               <View style={styles.customDateCol}>
                 <Text style={styles.customDateLabel}>Fecha Inicial (Desde):</Text>
-                {Platform.OS === 'web' ? (
-                  <input
-                    type="date"
-                    value={desdeVal}
-                    onChange={(e) => setDesdeVal(e.target.value)}
-                    style={{
-                      backgroundColor: '#F8FAFC',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '10px',
-                      padding: '8px 12px',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: '#0F172A',
-                      outline: 'none',
-                      height: '38px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ) : (
-                  <TextInput
-                    style={styles.customDateInput}
-                    placeholder="YYYY-MM-DD"
-                    value={desdeVal}
-                    onChangeText={setDesdeVal}
-                  />
-                )}
+                <TouchableOpacity
+                  style={styles.customDateClickableBtn}
+                  onPress={() => abrirCalendario(desdeVal, hastaVal, 'desde', (nDesde, nHasta) => {
+                    setDesdeVal(nDesde);
+                    setHastaVal(nHasta);
+                    if (onAplicarCustom) onAplicarCustom();
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={15} color="#0D9488" style={{ marginRight: 8 }} />
+                  <Text style={styles.customDateClickableText}>
+                    {desdeVal || 'Seleccionar fecha'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <View style={styles.customDateCol}>
                 <Text style={styles.customDateLabel}>Fecha Final (Hasta):</Text>
-                {Platform.OS === 'web' ? (
-                  <input
-                    type="date"
-                    value={hastaVal}
-                    onChange={(e) => setHastaVal(e.target.value)}
-                    style={{
-                      backgroundColor: '#F8FAFC',
-                      border: '1px solid #CBD5E1',
-                      borderRadius: '10px',
-                      padding: '8px 12px',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      color: '#0F172A',
-                      outline: 'none',
-                      height: '38px',
-                      boxSizing: 'border-box',
-                    }}
-                  />
-                ) : (
-                  <TextInput
-                    style={styles.customDateInput}
-                    placeholder="YYYY-MM-DD"
-                    value={hastaVal}
-                    onChangeText={setHastaVal}
-                  />
-                )}
+                <TouchableOpacity
+                  style={styles.customDateClickableBtn}
+                  onPress={() => abrirCalendario(desdeVal, hastaVal, 'hasta', (nDesde, nHasta) => {
+                    setDesdeVal(nDesde);
+                    setHastaVal(nHasta);
+                    if (onAplicarCustom) onAplicarCustom();
+                  })}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="calendar-outline" size={15} color="#0284C7" style={{ marginRight: 8 }} />
+                  <Text style={styles.customDateClickableText}>
+                    {hastaVal || 'Seleccionar fecha'}
+                  </Text>
+                </TouchableOpacity>
               </View>
 
               <TouchableOpacity
@@ -933,7 +1162,7 @@ export default function SuperAdminHomeScreen() {
           {/* TARJETA PLATILLOS MÁS VENDIDOS (TOP 5) CLICKABLE */}
           <TouchableOpacity
             style={styles.platilloMasVendidoCard}
-            onPress={() => setModalRankingVisible(true)}
+            onPress={abrirModalRanking}
             activeOpacity={0.85}
           >
             <View style={styles.platilloHeaderRow}>
@@ -941,7 +1170,6 @@ export default function SuperAdminHomeScreen() {
                 <Ionicons name="trophy" size={24} color="#D97706" />
                 <View>
                   <Text style={styles.platilloTitle}>Platillos Más Vendidos</Text>
-                  <Text style={{ fontSize: 11, color: '#92400E', fontWeight: '600' }}>Top 5 de lo más pedido</Text>
                 </View>
               </View>
 
@@ -1154,7 +1382,7 @@ export default function SuperAdminHomeScreen() {
           activeOpacity={0.85}
         >
           <Ionicons name="person-add-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
-          <Text style={styles.btnCrearCuentaTopText}>+ Crear Cuenta</Text>
+          <Text style={styles.btnCrearCuentaTopText}>Crear Cuenta</Text>
         </TouchableOpacity>
       </View>
 
@@ -1176,6 +1404,7 @@ export default function SuperAdminHomeScreen() {
 
             const getRolColor = (t) => {
               switch (t?.toLowerCase()) {
+                case 'desarrollador': return '#6366F1';
                 case 'superadmin': return '#0D9488';
                 case 'admin': return '#2563EB';
                 case 'mesero': return '#EA580C';
@@ -1278,13 +1507,26 @@ export default function SuperAdminHomeScreen() {
     });
 
     const alimentosFiltradosCat = catalogoAlimentos.filter((a) => {
+      // 1. Filtro por buscador
+      if (busquedaCatalogo.trim().length > 0) {
+        const query = busquedaCatalogo.trim().toLowerCase();
+        const coincide =
+          (a.nombre || '').toLowerCase().includes(query) ||
+          (a.tipo || '').toLowerCase().includes(query) ||
+          (a.zona || '').toLowerCase().includes(query);
+        if (!coincide) return false;
+      }
+
+      // 2. Filtro por categoría seleccionada
       if (catFiltroMenu === 'Todas') return true;
       const catFilterLower = catFiltroMenu.toLowerCase();
       const aTipoLower = (a.tipo || '').toLowerCase();
+      if ((catFilterLower === 'guarniciones' || catFilterLower === 'guarnicion') && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
       if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
       if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
       if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
       if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+      if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
       return aTipoLower === catFilterLower;
     });
 
@@ -1298,10 +1540,10 @@ export default function SuperAdminHomeScreen() {
           <View>
             <Text style={styles.sectionTitle}>
               {vistaMenuModo === 'menu_dia_ver'
-                ? 'Menú del Día (Vigente)'
+                ? 'Menú del Día'
                 : vistaMenuModo === 'menu_dia_editar'
                 ? 'Editar Menú del Día'
-                : 'Editar Alimentos (Catálogo Global)'}
+                : 'Editar Alimentos'}
             </Text>
             <Text style={styles.sectionSub}>
               {vistaMenuModo === 'menu_dia_ver'
@@ -1375,16 +1617,38 @@ export default function SuperAdminHomeScreen() {
         {/* SUB-VISTA 1: VER MENÚ DEL DÍA */}
         {vistaMenuModo === 'menu_dia_ver' && (
           <View>
-            <View style={styles.menuDiaVerHeaderRow}>
+            <View style={[styles.menuDiaVerHeaderRow, isMobile && styles.menuDiaVerHeaderRowMobile]}>
               <Text style={styles.menuDiaVerTitle}>Platillos del Menú de Hoy:</Text>
-              <TouchableOpacity
-                style={styles.btnBotonEntrarEditarMenu}
-                onPress={() => setVistaMenuModo('menu_dia_editar')}
-                activeOpacity={0.85}
-              >
-                <Ionicons name="pencil-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
-                <Text style={styles.btnBotonEntrarEditarMenuText}>Editar Menú del Día</Text>
-              </TouchableOpacity>
+              <View style={[styles.menuDiaVerActions, isMobile && styles.menuDiaVerActionsMobile]}>
+                <TouchableOpacity
+                  style={[
+                    styles.btnBotonEntrarEditarMenu,
+                    { backgroundColor: '#0284C7' },
+                    isMobile && styles.btnBotonEntrarEditarMenuMobile
+                  ]}
+                  onPress={() => setModalGeneradorVisible(true)}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="color-palette-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.btnBotonEntrarEditarMenuText, isMobile && styles.btnBotonEntrarEditarMenuTextMobile]}>
+                    Diseñar Imagen
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.btnBotonEntrarEditarMenu,
+                    isMobile && styles.btnBotonEntrarEditarMenuMobile
+                  ]}
+                  onPress={() => setVistaMenuModo('menu_dia_editar')}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="pencil-outline" size={16} color="#FFFFFF" style={{ marginRight: 6 }} />
+                  <Text style={[styles.btnBotonEntrarEditarMenuText, isMobile && styles.btnBotonEntrarEditarMenuTextMobile]}>
+                    Editar Menú del Día
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
 
             {/* SELECTOR DE CATEGORÍAS DEL MENÚ DEL DÍA */}
@@ -1479,11 +1743,16 @@ export default function SuperAdminHomeScreen() {
             </ScrollView>
 
             <View style={styles.searchAndCleanBarRow}>
-              <View style={styles.searchBoxInputContainer}>
+              <Pressable
+                style={[styles.searchBoxInputContainer, searchFocused && styles.searchBoxInputContainerFocused]}
+                onPress={() => searchMenuDiaRef.current?.focus()}
+              >
                 <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
                 <TextInput
+                  ref={searchMenuDiaRef}
                   style={styles.searchBoxInput}
                   placeholder={catFiltroMenuDia === 'Todas' ? 'Buscar platillo para agregar...' : `Buscar en ${catFiltroMenuDia}...`}
+                  placeholderTextColor="#94A3B8"
                   value={busquedaMenuDia}
                   onChangeText={setBusquedaMenuDia}
                   onFocus={() => setSearchFocused(true)}
@@ -1492,11 +1761,11 @@ export default function SuperAdminHomeScreen() {
                   }}
                 />
                 {busquedaMenuDia.length > 0 && (
-                  <TouchableOpacity onPress={() => setBusquedaMenuDia('')}>
+                  <TouchableOpacity onPress={() => setBusquedaMenuDia('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
                     <Ionicons name="close-circle" size={18} color="#64748B" />
                   </TouchableOpacity>
                 )}
-              </View>
+              </Pressable>
 
               <TouchableOpacity
                 style={styles.btnLimpiarMenu}
@@ -1609,7 +1878,7 @@ export default function SuperAdminHomeScreen() {
           <View>
             <View style={styles.catalogoHeaderRow}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catFiltrosScroll}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada'].map((cat) => (
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catFiltroChip, catFiltroMenu === cat && styles.catFiltroChipActive]}
@@ -1622,14 +1891,50 @@ export default function SuperAdminHomeScreen() {
                 ))}
               </ScrollView>
 
-              <TouchableOpacity
-                style={styles.btnNuevoAlimentoSmall}
-                onPress={abrirModalCrearAlimento}
-                activeOpacity={0.85}
+              <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
+                <TouchableOpacity
+                  style={[styles.btnNuevoAlimentoSmall, { backgroundColor: '#D97706' }]}
+                  onPress={abrirModalEdicionMasiva}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="create-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.btnNuevoAlimentoSmallText}>Editar Varios</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.btnNuevoAlimentoSmall}
+                  onPress={abrirModalCrearAlimento}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
+                  <Text style={styles.btnNuevoAlimentoSmallText}>+ Nuevo Alimento</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* BUSCADOR DE ALIMENTOS EN CATÁLOGO */}
+            <View style={[styles.searchAndCleanBarRow, { marginBottom: 16 }]}>
+              <Pressable
+                style={[styles.searchBoxInputContainer, searchCatalogoFocused && styles.searchBoxInputContainerFocused]}
+                onPress={() => searchCatalogoRef.current?.focus()}
               >
-                <Ionicons name="add-circle-outline" size={16} color="#FFFFFF" style={{ marginRight: 4 }} />
-                <Text style={styles.btnNuevoAlimentoSmallText}>+ Nuevo Alimento</Text>
-              </TouchableOpacity>
+                <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
+                <TextInput
+                  ref={searchCatalogoRef}
+                  style={styles.searchBoxInput}
+                  placeholder={catFiltroMenu === 'Todas' ? 'Buscar alimento por nombre o categoría...' : `Buscar en ${catFiltroMenu}...`}
+                  placeholderTextColor="#94A3B8"
+                  value={busquedaCatalogo}
+                  onChangeText={setBusquedaCatalogo}
+                  onFocus={() => setSearchCatalogoFocused(true)}
+                  onBlur={() => setSearchCatalogoFocused(false)}
+                />
+                {busquedaCatalogo.length > 0 && (
+                  <TouchableOpacity onPress={() => setBusquedaCatalogo('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close-circle" size={18} color="#64748B" />
+                  </TouchableOpacity>
+                )}
+              </Pressable>
             </View>
 
             {loading && !refreshing ? (
@@ -1650,6 +1955,8 @@ export default function SuperAdminHomeScreen() {
                         <Text style={styles.alimentoItemNombre}>{item.nombre}</Text>
                         <Text style={styles.alimentoItemSub}>
                           Categoría: <Text style={{ fontWeight: '700' }}>{item.tipo}</Text> • Zona: <Text style={{ fontWeight: '700' }}>{item.zona}</Text>
+                          {item.precio_paquete !== null && item.precio_paquete !== undefined ? ` • Paquete: $${item.precio_paquete}` : ''}
+                          {item.precio_antojito !== null && item.precio_antojito !== undefined ? ` • Antojito: $${item.precio_antojito}` : ''}
                         </Text>
                       </View>
 
@@ -1815,10 +2122,23 @@ export default function SuperAdminHomeScreen() {
                     activeOpacity={0.7}
                   >
                     <View style={styles.historialCardHeader}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text style={styles.historialOrdenTitle}>Orden #{ord.num_orden}</Text>
                         <View style={styles.mesaBadgePill}>
-                          <Text style={styles.mesaBadgePillText}>Mesa #{ord.num_mesa}</Text>
+                          <Text style={styles.mesaBadgePillText}>
+                            {Number(ord.num_mesa) >= 100 ? 'Para llevar #' + ord.num_mesa : 'Mesa #' + ord.num_mesa}
+                          </Text>
+                        </View>
+                        <View style={[styles.corteBadgePill, ord.corte ? styles.corteBadgePillActivo : styles.corteBadgePillSinCorte]}>
+                          <Ionicons
+                            name="receipt-outline"
+                            size={11}
+                            color={ord.corte ? '#6D28D9' : '#64748B'}
+                            style={{ marginRight: 3 }}
+                          />
+                          <Text style={[styles.corteBadgePillText, ord.corte ? styles.corteBadgePillTextActivo : styles.corteBadgePillTextSinCorte]}>
+                            {ord.corte ? `Corte #${ord.corte}` : 'Sin corte'}
+                          </Text>
                         </View>
                       </View>
                       <View style={styles.badgeCobradoPill}>
@@ -1950,12 +2270,128 @@ export default function SuperAdminHomeScreen() {
     );
   };
 
+  const renderLogsTab = () => {
+    return (
+      <ScrollView
+        style={styles.tabContentScroll}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={['#0D9488']} />}
+      >
+        {/* ENCABEZADO DE LA SECCIÓN */}
+        <View style={styles.logsHeaderCard}>
+          <View style={{ flex: 1, minWidth: 260 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+              <Ionicons name="shield-checkmark" size={24} color="#0D9488" style={{ marginRight: 8 }} />
+              <Text style={styles.logsHeaderTitle}>Registro de Errores y Bugs (Logs)</Text>
+            </View>
+            <Text style={styles.logsHeaderSubtitle}>
+              Monitoreo y auditoría de incidencias técnicas en el servidor y aplicaciones móviles.
+            </Text>
+          </View>
+          <View style={styles.logsActionButtonsRow}>
+            <TouchableOpacity
+              style={styles.btnActualizarLogs}
+              onPress={() => cargarLogs(archivoLogSeleccionado)}
+              disabled={cargandoLogs}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="refresh-outline" size={18} color="#0D9488" style={{ marginRight: 6 }} />
+              <Text style={styles.btnActualizarLogsText}>Actualizar</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.btnLimpiarLogs}
+              onPress={limpiarLogsHandler}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={18} color="#DC2626" style={{ marginRight: 6 }} />
+              <Text style={styles.btnLimpiarLogsText}>Limpiar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* SELECTOR DE ARCHIVO POR DÍA */}
+        <View style={styles.logsFilesContainer}>
+          <Text style={styles.logsFilesLabel}>Archivos disponibles:</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingVertical: 4 }}>
+            {archivosLogs.length === 0 ? (
+              <Text style={{ fontSize: 13, color: '#94A3B8', fontStyle: 'italic' }}>No hay archivos de log generados aún.</Text>
+            ) : (
+              archivosLogs.map((archivo) => {
+                const isSelected = archivo === archivoLogSeleccionado;
+                return (
+                  <TouchableOpacity
+                    key={archivo}
+                    style={[styles.logFilePill, isSelected && styles.logFilePillActive]}
+                    onPress={() => {
+                      setArchivoLogSeleccionado(archivo);
+                      cargarLogs(archivo);
+                    }}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons
+                      name="document-text"
+                      size={14}
+                      color={isSelected ? '#FFFFFF' : '#64748B'}
+                      style={{ marginRight: 6 }}
+                    />
+                    <Text style={[styles.logFilePillText, isSelected && styles.logFilePillTextActive]}>
+                      {archivo}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
+            )}
+          </ScrollView>
+        </View>
+
+        {/* VISOR DE CONTENIDO DEL LOG */}
+        <View style={styles.logViewerContainer}>
+          <View style={styles.logViewerHeader}>
+            <Text style={styles.logViewerTitle}>
+              📄 {archivoLogSeleccionado || 'Sin archivo seleccionado'}
+            </Text>
+            {Platform.OS === 'web' && archivoLogSeleccionado ? (
+              <TouchableOpacity
+                style={styles.btnDescargarLog}
+                onPress={() => {
+                  window.open(`${API_URL}/logs/descargar/${archivoLogSeleccionado}`, '_blank');
+                }}
+              >
+                <Ionicons name="download-outline" size={14} color="#2DD4BF" style={{ marginRight: 4 }} />
+                <Text style={styles.btnDescargarLogText}>Descargar .log</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+
+          {cargandoLogs ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <ActivityIndicator size="large" color="#0D9488" />
+              <Text style={{ marginTop: 10, color: '#94A3B8' }}>Cargando registros...</Text>
+            </View>
+          ) : (
+            <ScrollView
+              style={styles.logTerminal}
+              nestedScrollEnabled={true}
+              showsVerticalScrollIndicator={true}
+            >
+              <Text selectable={true} style={styles.logTerminalText}>
+                {contenidoLog || 'No hay contenido registrado en este archivo.'}
+              </Text>
+            </ScrollView>
+          )}
+        </View>
+      </ScrollView>
+    );
+  };
+
   const navItems = [
     { key: 'dashboard', label: 'Estadísticas', iconActive: 'stats-chart', iconInactive: 'stats-chart-outline' },
     { key: 'cortes', label: 'Cortes', iconActive: 'wallet', iconInactive: 'wallet-outline' },
     { key: 'cuentas', label: 'Cuentas', iconActive: 'people', iconInactive: 'people-outline' },
     { key: 'menu', label: 'Menú', iconActive: 'fast-food', iconInactive: 'fast-food-outline' },
     { key: 'historial', label: 'Historial', iconActive: 'time', iconInactive: 'time-outline' },
+    ...(isDev ? [{ key: 'logs', label: 'Logs / Errores', iconActive: 'document-text', iconInactive: 'document-text-outline' }] : []),
   ];
 
   return (
@@ -1971,8 +2407,8 @@ export default function SuperAdminHomeScreen() {
                 <Image source={require('../../../assets/logo.svg')} style={styles.logoImage} contentFit="contain" />
               </View>
               <View style={styles.userInfo}>
-                <Text style={styles.userNameText}>{user?.nombre || 'SuperAdmin'}</Text>
-                <Text style={styles.userRoleText}>🔑 SuperAdmin</Text>
+                <Text style={styles.userNameText}>{user?.nombre || (isDev ? 'Desarrollador' : 'SuperAdmin')}</Text>
+                <Text style={styles.userRoleText}>{isDev ? '💻 Desarrollador' : '🔑 SuperAdmin'}</Text>
               </View>
             </View>
 
@@ -2016,6 +2452,8 @@ export default function SuperAdminHomeScreen() {
               ? renderCuentasTab()
               : activeTab === 'menu'
               ? renderMenuTab()
+              : activeTab === 'logs' && isDev
+              ? renderLogsTab()
               : renderHistorialTab()}
           </View>
         </View>
@@ -2033,14 +2471,33 @@ export default function SuperAdminHomeScreen() {
               </View>
 
               <View style={styles.userInfo}>
-                <Text style={styles.userNameText}>{user?.nombre || 'SuperAdmin'}</Text>
-                <Text style={styles.userRoleText}>🔑 Panel de SuperAdmin</Text>
+                <Text style={styles.userNameText}>{user?.nombre || (isDev ? 'Desarrollador' : 'SuperAdmin')}</Text>
+                <Text style={styles.userRoleText}>{isDev ? '💻 Desarrollador' : '🔑 Panel de SuperAdmin'}</Text>
               </View>
             </View>
 
-            <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
-              <Ionicons name="log-out-outline" size={20} color="#0D9488" />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {isDev && (
+                <TouchableOpacity
+                  style={[
+                    styles.logoutButton,
+                    { marginRight: 8, backgroundColor: activeTab === 'logs' ? '#CCFBF1' : '#F1F5F9' },
+                  ]}
+                  onPress={() => setActiveTab('logs')}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons
+                    name={activeTab === 'logs' ? 'document-text' : 'document-text-outline'}
+                    size={20}
+                    color="#0D9488"
+                  />
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
+                <Ionicons name="log-out-outline" size={20} color="#0D9488" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* VISTA PRINCIPAL */}
@@ -2053,6 +2510,8 @@ export default function SuperAdminHomeScreen() {
               ? renderCuentasTab()
               : activeTab === 'menu'
               ? renderMenuTab()
+              : activeTab === 'logs' && isDev
+              ? renderLogsTab()
               : renderHistorialTab()}
           </View>
 
@@ -2122,6 +2581,21 @@ export default function SuperAdminHomeScreen() {
               />
               <Text style={[styles.navLabel, activeTab === 'historial' && styles.navLabelActive]}>Historial</Text>
             </TouchableOpacity>
+
+            {isDev && (
+              <TouchableOpacity
+                style={[styles.navItem, activeTab === 'logs' && styles.navItemActive]}
+                onPress={() => setActiveTab('logs')}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={activeTab === 'logs' ? 'document-text' : 'document-text-outline'}
+                  size={20}
+                  color={activeTab === 'logs' ? '#0D9488' : '#64748B'}
+                />
+                <Text style={[styles.navLabel, activeTab === 'logs' && styles.navLabelActive]}>Logs</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </>
       )}
@@ -2174,7 +2648,7 @@ export default function SuperAdminHomeScreen() {
 
             <Text style={styles.inputLabel}>Tipo de Cuenta / Rol:</Text>
             <View style={styles.tipoRolesGrid}>
-              {['mesero', 'admin', 'barra', 'cocina', 'comal', 'superadmin'].map((r) => (
+              {['mesero', 'admin', 'barra', 'cocina', 'comal', 'superadmin', 'desarrollador'].map((r) => (
                 <TouchableOpacity
                   key={r}
                   style={[styles.rolOptionChip, formCuentaTipo === r && styles.rolOptionChipActive]}
@@ -2197,7 +2671,7 @@ export default function SuperAdminHomeScreen() {
       {/* MODAL CREAR / EDITAR ALIMENTO */}
       <Modal visible={alimentoModalVisible} transparent animationType="slide">
         <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
+          <View style={[styles.modalCard, { maxHeight: '90%' }]}>
             <View style={styles.modalHeaderRow}>
               <Text style={styles.modalTitle}>{alimentoEditando ? '✏️ Editar Alimento' : '🍱 Nuevo Alimento'}</Text>
               <TouchableOpacity onPress={() => setAlimentoModalVisible(false)}>
@@ -2205,108 +2679,442 @@ export default function SuperAdminHomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Nombre del Alimento: *</Text>
-            <TextInput
-              style={[
-                styles.inputField,
-                formError && !formNombre.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
-              ]}
-              placeholder="Ej. Tacos de Asada"
-              placeholderTextColor="#94A3B8"
-              value={formNombre}
-              onChangeText={(val) => { setFormNombre(val); if (formError) setFormError(false); }}
-            />
-            {formError && !formNombre.trim() && (
-              <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
-                * El nombre del alimento es obligatorio
-              </Text>
-            )}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>Nombre del Alimento: *</Text>
+              <TextInput
+                style={[
+                  styles.inputField,
+                  formError && !formNombre.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                ]}
+                placeholder="Ej. Tacos de Asada"
+                placeholderTextColor="#94A3B8"
+                value={formNombre}
+                onChangeText={(val) => { setFormNombre(val); if (formError) setFormError(false); }}
+              />
+              {formError && !formNombre.trim() && (
+                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
+                  * El nombre del alimento es obligatorio
+                </Text>
+              )}
 
-            <Text style={styles.inputLabel}>Categoría:</Text>
-            <View style={styles.tipoRolesGrid}>
-              {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra'].map((cat) => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.rolOptionChip, formTipo === cat && styles.rolOptionChipActive]}
-                  onPress={() => setFormTipo(cat)}
-                >
-                  <Text style={[styles.rolOptionText, formTipo === cat && styles.rolOptionTextActive]}>{cat}</Text>
-                </TouchableOpacity>
-              ))}
+              <Text style={styles.inputLabel}>Precio ($): *</Text>
+              <TextInput
+                style={[
+                  styles.inputField,
+                  formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                ]}
+                placeholder="0.00"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={formPrecio}
+                onChangeText={(val) => { setFormPrecio(val); if (formError) setFormError(false); }}
+              />
+              {formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && (
+                <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
+                  * El precio es obligatorio (número válido ≥ 0)
+                </Text>
+              )}
+
+              <Text style={styles.inputLabel}>Precio en Paquete ($) (Opcional, dejar en blanco si no aplica):</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Dejar en blanco si no aplica"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={formPrecioPaquete}
+                onChangeText={setFormPrecioPaquete}
+              />
+
+              <Text style={styles.inputLabel}>Precio en Antojito ($) (Opcional, dejar en blanco si no aplica):</Text>
+              <TextInput
+                style={styles.inputField}
+                placeholder="Dejar en blanco si no aplica"
+                placeholderTextColor="#94A3B8"
+                keyboardType="numeric"
+                value={formPrecioAntojito}
+                onChangeText={setFormPrecioAntojito}
+              />
+
+              <Text style={styles.inputLabel}>Categoría:</Text>
+              <View style={styles.tipoRolesGrid}>
+                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros'].map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.rolOptionChip, formTipo === cat && styles.rolOptionChipActive]}
+                    onPress={() => setFormTipo(cat)}
+                  >
+                    <Text style={[styles.rolOptionText, formTipo === cat && styles.rolOptionTextActive]}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={styles.inputLabel}>Zona de Preparación:</Text>
+              <View style={styles.tipoRolesGrid}>
+                {['cocina', 'comal', 'barra'].map((z) => (
+                  <TouchableOpacity
+                    key={z}
+                    style={[styles.rolOptionChip, formZona === z && styles.rolOptionChipActive]}
+                    onPress={() => setFormZona(z)}
+                  >
+                    <Text style={[styles.rolOptionText, formZona === z && styles.rolOptionTextActive]}>{z.toUpperCase()}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#F0FDFA', borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }}>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#0F766E', fontWeight: '700' }}>
+                      🥤 ¿Ofrecer en paquetes?
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#0F766E' }}>
+                      Indica si esta bebida está disponible para elegirse en paquetes
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formAplicaPaquete}
+                    onValueChange={setFormAplicaPaquete}
+                    trackColor={{ false: '#CBD5E1', true: '#99F6E4' }}
+                    thumbColor={formAplicaPaquete ? '#0D9488' : '#64748B'}
+                  />
+                </View>
+              )}
+
+              {((formTipo || '').toLowerCase().includes('comida')) && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '700' }}>
+                      🫓 ¿Ofrecer como guisado para antojitos?
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#B45309' }}>
+                      Indica si esta comida está disponible como guisado en antojitos
+                    </Text>
+                  </View>
+                  <Switch
+                    value={formAplicaPaqueteAntojito}
+                    onValueChange={setFormAplicaPaqueteAntojito}
+                    trackColor={{ false: '#CBD5E1', true: '#FDE68A' }}
+                    thumbColor={formAplicaPaqueteAntojito ? '#D97706' : '#64748B'}
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity style={styles.btnSubmitModal} onPress={handleGuardarAlimento} activeOpacity={0.85}>
+                <Text style={styles.btnSubmitModalText}>{alimentoEditando ? 'Guardar Cambios' : 'Crear Alimento'}</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODAL EDICIÓN MASIVA DE PRECIOS */}
+      <Modal visible={modalMasivoVisible} animationType="slide" transparent>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalCard, { maxWidth: 650, maxHeight: '90%' }]}>
+            <View style={styles.modalHeaderRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <Ionicons name="create-outline" size={22} color="#D97706" style={{ marginRight: 8 }} />
+                <Text style={styles.modalTitle}>Editar Varios Precios</Text>
+              </View>
+              <TouchableOpacity onPress={() => setModalMasivoVisible(false)}>
+                <Ionicons name="close-circle-outline" size={26} color="#64748B" />
+              </TouchableOpacity>
             </View>
 
-            <Text style={styles.inputLabel}>Precio ($): *</Text>
-            <TextInput
-              style={[
-                styles.inputField,
-                formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
-              ]}
-              placeholder="0.00"
-              placeholderTextColor="#94A3B8"
-              keyboardType="numeric"
-              value={formPrecio}
-              onChangeText={(val) => { setFormPrecio(val); if (formError) setFormError(false); }}
-            />
-            {formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && (
-              <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
-                * El precio es obligatorio (número válido ≥ 0)
-              </Text>
-            )}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text style={styles.inputLabel}>1. Selecciona la Categoría:</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={[styles.catFiltroChip, catFiltroMasivo === cat && styles.catFiltroChipActive]}
+                    onPress={() => {
+                      setCatFiltroMasivo(cat);
+                      const filtered = catalogoAlimentos.filter((a) => {
+                        if (cat === 'Todas') return true;
+                        const catFilterLower = cat.toLowerCase();
+                        const aTipoLower = (a.tipo || '').toLowerCase();
+                        if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
+                        if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
+                        if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+                        if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
+                        if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+                        if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
+                        return aTipoLower === catFilterLower;
+                      });
+                      const map = {};
+                      filtered.forEach((i) => { map[i.id] = true; });
+                      setSelectedIdsMasivo(map);
+                    }}
+                  >
+                    <Text style={[styles.catFiltroText, catFiltroMasivo === cat && styles.catFiltroTextActive]}>
+                      {cat}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
 
-            <Text style={styles.inputLabel}>Zona de Preparación:</Text>
-            <View style={styles.tipoRolesGrid}>
-              {['cocina', 'comal', 'barra'].map((z) => (
+              {/* Lista de Alimentos de la categoría con Checkboxes */}
+              {(() => {
+                const itemsMostrar = catalogoAlimentos.filter((a) => {
+                  if (catFiltroMasivo === 'Todas') return true;
+                  const catFilterLower = catFiltroMasivo.toLowerCase();
+                  const aTipoLower = (a.tipo || '').toLowerCase();
+                  if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
+                  if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
+                  if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+                  if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
+                  if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
+                  return aTipoLower === catFilterLower;
+                });
+
+                const countSelected = itemsMostrar.filter((i) => selectedIdsMasivo[i.id]).length;
+
+                return (
+                  <View style={{ marginBottom: 16 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={styles.inputLabel}>
+                        2. Selecciona Alimentos ({countSelected} de {itemsMostrar.length} marcados):
+                      </Text>
+
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TouchableOpacity
+                          style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#FEF3C7', borderRadius: 6 }}
+                          onPress={() => seleccionarTodosMasivo(itemsMostrar)}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706' }}>Marcar Todos</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: '#F1F5F9', borderRadius: 6 }}
+                          onPress={() => deseleccionarTodosMasivo(itemsMostrar)}
+                        >
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#64748B' }}>Desmarcar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+
+                    <View style={{ maxHeight: 220, borderWidth: 1, borderColor: '#E2E8F0', borderRadius: 10, padding: 8, backgroundColor: '#FAFAFA' }}>
+                      <ScrollView nestedScrollEnabled showsVerticalScrollIndicator>
+                        {itemsMostrar.map((item) => {
+                          const isSelected = !!selectedIdsMasivo[item.id];
+                          return (
+                            <TouchableOpacity
+                              key={item.id}
+                              style={{
+                                flexDirection: 'row',
+                                alignItems: 'center',
+                                paddingVertical: 8,
+                                paddingHorizontal: 10,
+                                borderBottomWidth: 1,
+                                borderBottomColor: '#F1F5F9',
+                                backgroundColor: isSelected ? '#FFFBEB' : 'transparent',
+                                borderRadius: 6,
+                              }}
+                              onPress={() => toggleSelectMasivo(item.id)}
+                            >
+                              <Ionicons
+                                name={isSelected ? 'checkbox' : 'square-outline'}
+                                size={20}
+                                color={isSelected ? '#D97706' : '#94A3B8'}
+                                style={{ marginRight: 10 }}
+                              />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{item.nombre}</Text>
+                                <Text style={{ fontSize: 12, color: '#64748B' }}>
+                                  Categoría: {item.tipo} • Regular: ${item.precio}.00
+                                  {item.precio_paquete !== null && item.precio_paquete !== undefined ? ` • Paquete: $${item.precio_paquete}` : ''}
+                                  {item.precio_antojito !== null && item.precio_antojito !== undefined ? ` • Antojito: $${item.precio_antojito}` : ''}
+                                </Text>
+                              </View>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </ScrollView>
+                    </View>
+                  </View>
+                );
+              })()}
+
+              {/* 3. CONFIGURAR NUEVOS PRECIOS O ESTADO */}
+              <Text style={styles.inputLabel}>3. Elige los precios o estado a cambiar:</Text>
+
+              {/* OPCIÓN PRECIO REGULAR */}
+              <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
                 <TouchableOpacity
-                  key={z}
-                  style={[styles.rolOptionChip, formZona === z && styles.rolOptionChipActive]}
-                  onPress={() => setFormZona(z)}
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarPrecioRegular ? 8 : 0 }}
+                  onPress={() => setModificarPrecioRegular(!modificarPrecioRegular)}
                 >
-                  <Text style={[styles.rolOptionText, formZona === z && styles.rolOptionTextActive]}>{z.toUpperCase()}</Text>
+                  <Ionicons
+                    name={modificarPrecioRegular ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={modificarPrecioRegular ? '#D97706' : '#94A3B8'}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Precio Regular ($)</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
 
-            {((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#F0FDFA', borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={{ fontSize: 13, color: '#0F766E', fontWeight: '700' }}>
-                    🥤 ¿Ofrecer en paquetes?
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#0F766E' }}>
-                    Indica si esta bebida está disponible para elegirse en paquetes
-                  </Text>
-                </View>
-                <Switch
-                  value={formAplicaPaquete}
-                  onValueChange={setFormAplicaPaquete}
-                  trackColor={{ false: '#CBD5E1', true: '#99F6E4' }}
-                  thumbColor={formAplicaPaquete ? '#0D9488' : '#64748B'}
-                />
+                {modificarPrecioRegular && (
+                  <TextInput
+                    style={[styles.inputField, { marginTop: 8 }]}
+                    keyboardType="numeric"
+                    placeholder="Escribe el nuevo precio regular (ej. 50)"
+                    placeholderTextColor="#94A3B8"
+                    value={nuevoPrecioRegular}
+                    onChangeText={setNuevoPrecioRegular}
+                  />
+                )}
               </View>
-            )}
 
-            {((formTipo || '').toLowerCase().includes('comida')) && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
-                <View style={{ flex: 1, paddingRight: 10 }}>
-                  <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '700' }}>
-                    🫓 ¿Ofrecer como guisado para antojitos?
-                  </Text>
-                  <Text style={{ fontSize: 11, color: '#B45309' }}>
-                    Indica si esta comida está disponible como guisado en antojitos
-                  </Text>
-                </View>
-                <Switch
-                  value={formAplicaPaqueteAntojito}
-                  onValueChange={setFormAplicaPaqueteAntojito}
-                  trackColor={{ false: '#CBD5E1', true: '#FDE68A' }}
-                  thumbColor={formAplicaPaqueteAntojito ? '#D97706' : '#64748B'}
-                />
+              {/* OPCIÓN PRECIO PAQUETE */}
+              <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarPrecioPaquete ? 8 : 0 }}
+                  onPress={() => setModificarPrecioPaquete(!modificarPrecioPaquete)}
+                >
+                  <Ionicons
+                    name={modificarPrecioPaquete ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={modificarPrecioPaquete ? '#D97706' : '#94A3B8'}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Precio en Paquete ($)</Text>
+                </TouchableOpacity>
+
+                {modificarPrecioPaquete && (
+                  <TextInput
+                    style={[styles.inputField, { marginTop: 8 }]}
+                    keyboardType="numeric"
+                    placeholder="Escribe el nuevo precio en paquete (ej. 40 o blanco para eliminar)"
+                    placeholderTextColor="#94A3B8"
+                    value={nuevoPrecioPaquete}
+                    onChangeText={setNuevoPrecioPaquete}
+                  />
+                )}
               </View>
-            )}
 
-            <TouchableOpacity style={styles.btnSubmitModal} onPress={handleGuardarAlimento} activeOpacity={0.85}>
-              <Text style={styles.btnSubmitModalText}>{alimentoEditando ? 'Guardar Cambios' : 'Crear Alimento'}</Text>
-            </TouchableOpacity>
+              {/* OPCIÓN PRECIO ANTOJITO */}
+              <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarPrecioAntojito ? 8 : 0 }}
+                  onPress={() => setModificarPrecioAntojito(!modificarPrecioAntojito)}
+                >
+                  <Ionicons
+                    name={modificarPrecioAntojito ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={modificarPrecioAntojito ? '#D97706' : '#94A3B8'}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Precio en Antojito ($)</Text>
+                </TouchableOpacity>
+
+                {modificarPrecioAntojito && (
+                  <TextInput
+                    style={[styles.inputField, { marginTop: 8 }]}
+                    keyboardType="numeric"
+                    placeholder="Escribe el nuevo precio en antojito (ej. 10 o blanco para eliminar)"
+                    placeholderTextColor="#94A3B8"
+                    value={nuevoPrecioAntojito}
+                    onChangeText={setNuevoPrecioAntojito}
+                  />
+                )}
+              </View>
+
+              {/* OPCIÓN CAMBIAR ESTADO / DISPONIBILIDAD */}
+              <View style={{ marginBottom: 16, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <TouchableOpacity
+                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarEstadoMasivo ? 10 : 0 }}
+                  onPress={() => setModificarEstadoMasivo(!modificarEstadoMasivo)}
+                >
+                  <Ionicons
+                    name={modificarEstadoMasivo ? 'checkbox' : 'square-outline'}
+                    size={20}
+                    color={modificarEstadoMasivo ? '#D97706' : '#94A3B8'}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Estado / Disponibilidad</Text>
+                </TouchableOpacity>
+
+                {modificarEstadoMasivo && (
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        borderWidth: 1,
+                        borderColor: nuevoEstadoMasivo === 1 ? '#10B981' : '#CBD5E1',
+                        backgroundColor: nuevoEstadoMasivo === 1 ? '#ECFDF5' : '#FFFFFF',
+                      }}
+                      onPress={() => setNuevoEstadoMasivo(1)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={nuevoEstadoMasivo === 1 ? 'checkmark-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={nuevoEstadoMasivo === 1 ? '#10B981' : '#64748B'}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '700',
+                          color: nuevoEstadoMasivo === 1 ? '#065F46' : '#64748B',
+                        }}
+                      >
+                        Disponible (Activo)
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={{
+                        flex: 1,
+                        paddingVertical: 10,
+                        borderRadius: 8,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexDirection: 'row',
+                        borderWidth: 1,
+                        borderColor: nuevoEstadoMasivo === 0 ? '#EF4444' : '#CBD5E1',
+                        backgroundColor: nuevoEstadoMasivo === 0 ? '#FEF2F2' : '#FFFFFF',
+                      }}
+                      onPress={() => setNuevoEstadoMasivo(0)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={nuevoEstadoMasivo === 0 ? 'close-circle' : 'ellipse-outline'}
+                        size={18}
+                        color={nuevoEstadoMasivo === 0 ? '#EF4444' : '#64748B'}
+                        style={{ marginRight: 6 }}
+                      />
+                      <Text
+                        style={{
+                          fontSize: 13,
+                          fontWeight: '700',
+                          color: nuevoEstadoMasivo === 0 ? '#991B1B' : '#64748B',
+                        }}
+                      >
+                        No disponible (Inactivo)
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+
+              <TouchableOpacity
+                style={[styles.btnSubmitModal, { backgroundColor: '#D97706', marginTop: 10 }]}
+                onPress={handleGuardarPreciosMasivo}
+                activeOpacity={0.85}
+              >
+                <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnSubmitModalText}>
+                  Aplicar Cambios a {Object.keys(selectedIdsMasivo).filter((id) => selectedIdsMasivo[id]).length} Alimentos
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -2546,7 +3354,7 @@ export default function SuperAdminHomeScreen() {
             <View style={{ marginBottom: 12 }}>
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 6 }}>Filtrar por Categoría / Tipo de Alimento:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                {['Todos', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postres', 'Tortas', 'Extras'].map((cat) => (
+                {['Todos', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[
@@ -2573,11 +3381,11 @@ export default function SuperAdminHomeScreen() {
               {loadingRanking ? (
                 <ActivityIndicator size="large" color="#0D9488" style={{ marginVertical: 30 }} />
               ) : (() => {
-                const rankingBase = rankingIndependiente && rankingIndependiente.length > 0
+                const rankingBase = Array.isArray(rankingIndependiente)
                   ? rankingIndependiente
-                  : stats.platillos_ranking && stats.platillos_ranking.length > 0
+                  : (stats.platillos_ranking && stats.platillos_ranking.length > 0
                     ? stats.platillos_ranking
-                    : stats.platillos_mas_vendidos || [];
+                    : stats.platillos_mas_vendidos || []);
 
                 const rankingFiltrado = rankingBase.filter((item) => {
                   if (categoriaFiltroRanking === 'Todos') return true;
@@ -2648,6 +3456,27 @@ export default function SuperAdminHomeScreen() {
         comanda={ticketComandaSeleccionada}
         opcionesCobro={ticketOpcionesCobro}
         onClose={() => setModalTicketVisible(false)}
+      />
+
+      {/* MODAL GENERADOR DE IMAGEN DEL MENÚ DEL DÍA */}
+      <ModalGeneradorMenu
+        visible={modalGeneradorVisible}
+        onClose={() => setModalGeneradorVisible(false)}
+        alimentosCat={catalogoAlimentos}
+      />
+
+      {/* MODAL DE CALENDARIO INTERACTIVO DE RANGO DE FECHAS */}
+      <ModalCalendarioRango
+        visible={calendarioModal.visible}
+        onClose={() => setCalendarioModal((prev) => ({ ...prev, visible: false }))}
+        desde={calendarioModal.desde}
+        hasta={calendarioModal.hasta}
+        modoInicial={calendarioModal.modo || 'desde'}
+        onAplicar={(nDesde, nHasta) => {
+          if (calendarioModal.onAplicar) {
+            calendarioModal.onAplicar(nDesde, nHasta);
+          }
+        }}
       />
     </SafeAreaView>
   );
@@ -2984,6 +3813,36 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#64748B',
     marginBottom: 4,
+  },
+  btnAbrirCalendarioPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#CCFBF1',
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+  },
+  btnAbrirCalendarioPillText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#0F766E',
+  },
+  customDateClickableBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 38,
+  },
+  customDateClickableText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   customDateInput: {
     backgroundColor: '#F8FAFC',
@@ -3443,23 +4302,47 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: 12,
   },
+  menuDiaVerHeaderRowMobile: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+    gap: 10,
+  },
   menuDiaVerTitle: {
     fontSize: 15,
     fontWeight: '800',
     color: '#0F172A',
   },
+  menuDiaVerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  menuDiaVerActionsMobile: {
+    width: '100%',
+    flexWrap: 'wrap',
+  },
   btnBotonEntrarEditarMenu: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: '#0D9488',
     paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 10,
   },
+  btnBotonEntrarEditarMenuMobile: {
+    flex: 1,
+    minWidth: 140,
+    paddingHorizontal: 8,
+    paddingVertical: 9,
+  },
   btnBotonEntrarEditarMenuText: {
     fontSize: 13,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  btnBotonEntrarEditarMenuTextMobile: {
+    fontSize: 12,
   },
   menuDiaVerListContainer: {
     gap: 10,
@@ -3497,17 +4380,31 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#99F6E4',
     borderRadius: 12,
     paddingHorizontal: 12,
-    height: 44,
+    height: 48,
+    cursor: 'text',
+  },
+  searchBoxInputContainerFocused: {
+    borderColor: '#0D9488',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   searchBoxInput: {
     flex: 1,
-    fontSize: 13,
+    height: '100%',
+    alignSelf: 'stretch',
+    paddingVertical: 0,
+    fontSize: 14,
     fontWeight: '600',
     color: '#0F172A',
+    ...(Platform.OS === 'web' ? { outlineStyle: 'none' } : {}),
   },
   btnLimpiarMenu: {
     flexDirection: 'row',
@@ -3900,6 +4797,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontWeight: '800',
     color: '#1E40AF',
+  },
+  corteBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  corteBadgePillActivo: {
+    backgroundColor: '#F5F3FF',
+    borderColor: '#DDD6FE',
+  },
+  corteBadgePillSinCorte: {
+    backgroundColor: '#F1F5F9',
+    borderColor: '#E2E8F0',
+  },
+  corteBadgePillText: {
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  corteBadgePillTextActivo: {
+    color: '#6D28D9',
+  },
+  corteBadgePillTextSinCorte: {
+    color: '#64748B',
   },
   badgeCobradoPill: {
     backgroundColor: '#DCFCE7',
@@ -4321,5 +5244,159 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     color: '#334155',
+  },
+  // ==========================================
+  // ESTILOS SECCIÓN LOGS
+  // ==========================================
+  logsHeaderCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  logsHeaderTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  logsHeaderSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  logsActionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  btnActualizarLogs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1,
+    borderColor: '#0D9488',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  btnActualizarLogsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
+  btnLimpiarLogs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#EF4444',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  btnLimpiarLogsText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#DC2626',
+  },
+  logsFilesContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  logsFilesLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
+    textTransform: 'uppercase',
+    marginBottom: 8,
+    letterSpacing: 0.5,
+  },
+  logFilePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+  },
+  logFilePillActive: {
+    backgroundColor: '#0D9488',
+    borderColor: '#0D9488',
+  },
+  logFilePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#475569',
+  },
+  logFilePillTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+  },
+  logViewerContainer: {
+    backgroundColor: '#0F172A',
+    borderRadius: 14,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: '#1E293B',
+    minHeight: 380,
+  },
+  logViewerHeader: {
+    backgroundColor: '#1E293B',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#334155',
+  },
+  logViewerTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#F8FAFC',
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  btnDescargarLog: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#14B8A620',
+    borderWidth: 1,
+    borderColor: '#0D9488',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  btnDescargarLogText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#2DD4BF',
+  },
+  logTerminal: {
+    padding: 16,
+    maxHeight: 550,
+  },
+  logTerminalText: {
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    fontSize: 12,
+    color: '#38BDF8',
+    lineHeight: 18,
   },
 });

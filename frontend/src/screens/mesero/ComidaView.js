@@ -320,6 +320,7 @@ export default function ComidaView({ onVolverMenu }) {
           }
 
           return {
+            id_alimento: p.platoFuerte?.id || null,
             alimento: alimentoConZona,
             costo: costoPaquete,
             entrada: entradaConZona,

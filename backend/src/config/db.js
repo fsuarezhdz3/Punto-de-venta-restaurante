@@ -1,5 +1,6 @@
+const path = require('path');
 const mysql = require('mysql2/promise');
-require('dotenv').config();
+require('dotenv').config({ path: path.join(__dirname, '../../.env') });
 
 const pool = mysql.createPool({
   host: process.env.DB_HOST || 'localhost',
@@ -16,6 +17,9 @@ pool.testConnection = async () => {
   try {
     const connection = await pool.getConnection();
     console.log(`✅ Conexión exitosa a la base de datos MySQL [${process.env.DB_NAME || 'pos_lacocina'}] en ${process.env.DB_HOST || 'localhost'}`);
+    try {
+      await connection.query('SET GLOBAL max_allowed_packet = 67108864');
+    } catch (e) {}
     connection.release();
   } catch (error) {
     console.error(`❌ Error al conectar a la base de datos MySQL: ${error.message}`);

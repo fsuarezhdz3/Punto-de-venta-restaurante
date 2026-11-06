@@ -8,7 +8,15 @@ const {
   actualizarAlimento,
   guardarMenuDelDia,
   actualizarPreciosMasivo,
+  getMenuDiseno,
+  guardarMenuDiseno,
 } = require('../controllers/alimentosController');
+
+// GET /api/alimentos/menu-diseno - Consultar diseño y plantilla guardada
+router.get('/menu-diseno', getMenuDiseno);
+
+// POST /api/alimentos/menu-diseno - Guardar diseño y plantilla
+router.post('/menu-diseno', guardarMenuDiseno);
 
 // GET /api/alimentos (opcional ?tipo=Desayuno) - Solo disponibles para mesero
 router.get('/', getAlimentos);

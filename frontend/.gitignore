@@ -5,6 +5,7 @@ node_modules/
 .expo/
 web-build/
 dist/
+dist-electron/
 
 # Environment files
 .env

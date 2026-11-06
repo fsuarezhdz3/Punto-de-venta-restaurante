@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import {
   StyleSheet,
   Text,
@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MeseroContext } from '../../context/MeseroContext';
+import ModalPedidoEspecial from '../../components/ModalPedidoEspecial';
 
 import DesayunosView from './DesayunosView';
 import ComidaView from './ComidaView';
@@ -22,10 +23,12 @@ import LitrosView from './LitrosView';
 import EntradasView from './EntradasView';
 import PlatosFuertesView from './PlatosFuertesView';
 import GuarnicionesView from './GuarnicionesView';
+import OtrosView from './OtrosView';
 
 export default function MenuTab() {
   const { selectedMesa, activeCategoryView, setActiveCategoryView, showSinMesaModal } = useContext(MeseroContext);
   const { width } = useWindowDimensions();
+  const [modalEspecialVisible, setModalEspecialVisible] = useState(false);
 
   // Cálculo de columnas responsivo para Tablet en Vertical y Horizontal
   const cardWidth = width > 1024 ? '18.5%' : width > 768 ? '23.5%' : width > 500 ? '31.5%' : '48%';
@@ -40,7 +43,17 @@ export default function MenuTab() {
     { id: 'postres', nombre: 'POSTRES', image: require('../../../assets/Postres.webp'), icon: 'ice-cream-outline', color: '#EC4899', bg: '#FCE7F3' },
     { id: 'extras', nombre: 'EXTRAS', image: require('../../../assets/extras.webp'), icon: 'add-circle-outline', color: '#475569', bg: '#F1F5F9' },
     { id: 'litros', nombre: 'LITROS', image: require('../../../assets/litros.webp'), icon: 'beaker-outline', color: '#0D9488', bg: '#CCFBF1' },
+    { id: 'otros', nombre: 'OTROS', image: null, icon: 'grid-outline', color: '#6366F1', bg: '#EEF2FF' },
   ];
+
+  // Abrir modal de pedido personalizado
+  const handleOpenModalEspecial = () => {
+    if (!selectedMesa) {
+      showSinMesaModal();
+      return;
+    }
+    setModalEspecialVisible(true);
+  };
 
   // Al hacer clic en una categoría
   const handleSelectCategoria = (cat) => {
@@ -106,8 +119,31 @@ export default function MenuTab() {
     return <GuarnicionesView onVolverMenu={() => setActiveCategoryView(null)} />;
   }
 
+  // Si está dentro de la vista de Otros
+  if (activeCategoryView === 'otros') {
+    return <OtrosView onVolverMenu={() => setActiveCategoryView(null)} />;
+  }
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+      {/* Indicador de Mesa Seleccionada */}
+      {selectedMesa && (
+        <View style={styles.mesaIndicatorCard}>
+          <Ionicons
+            name={Number(selectedMesa.num_mesa) >= 100 ? 'bag-handle-outline' : 'restaurant-outline'}
+            size={18}
+            color="#0F172A"
+            style={{ marginRight: 8 }}
+          />
+          <Text style={styles.mesaIndicatorText}>
+            Comanda para:{' '}
+            <Text style={styles.mesaIndicatorBold}>
+              {selectedMesa.nombre || `Mesa #${selectedMesa.num_mesa}`}
+            </Text>
+          </Text>
+        </View>
+      )}
+
       {/* Título de la Sección */}
       <Text style={styles.sectionTitle}>Menú de Alimentos</Text>
 
@@ -120,7 +156,7 @@ export default function MenuTab() {
             onPress={() => handleSelectCategoria(cat)}
             activeOpacity={0.85}
           >
-            {/* Área de la Imagen */}
+            {/* Área de la Imagen o Ícono */}
             <View style={styles.cardTopArea}>
               {cat.image ? (
                 <Image
@@ -144,6 +180,27 @@ export default function MenuTab() {
           </TouchableOpacity>
         ))}
       </View>
+
+      {/* Apartado Inferior: Pedido Personalizado (Hasta abajo) */}
+      <View style={styles.bottomSectionPersonalizado}>
+        <Text style={styles.bottomPersonalizadoDescription}>
+          Pedidos especiales o fuera del menú.
+        </Text>
+        <TouchableOpacity
+          style={styles.bottomPersonalizadoBtn}
+          onPress={handleOpenModalEspecial}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="sparkles" size={19} color="#FFFFFF" style={{ marginRight: 8 }} />
+          <Text style={styles.bottomPersonalizadoBtnText}>Pedido Personalizado</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Modal Emergente de Pedido Especial Fuera de Menú */}
+      <ModalPedidoEspecial
+        visible={modalEspecialVisible}
+        onClose={() => setModalEspecialVisible(false)}
+      />
     </ScrollView>
   );
 }
@@ -242,5 +299,51 @@ const styles = StyleSheet.create({
     color: '#0F172A',
     letterSpacing: 0.5,
     textAlign: 'center',
+  },
+
+  /* Apartado Inferior: Pedido Personalizado (Hasta abajo) */
+  bottomSectionPersonalizado: {
+    backgroundColor: '#F0FDFA',
+    borderWidth: 1.5,
+    borderColor: '#CCFBF1',
+    borderRadius: 20,
+    padding: 18,
+    marginTop: 24,
+    marginBottom: 20,
+    alignItems: 'center',
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  bottomPersonalizadoDescription: {
+    fontSize: 14,
+    color: '#0F766E',
+    fontWeight: '600',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  bottomPersonalizadoBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D9488',
+    paddingVertical: 13,
+    paddingHorizontal: 28,
+    borderRadius: 14,
+    shadowColor: '#0D9488',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 3,
+    width: '100%',
+    maxWidth: 420,
+  },
+  bottomPersonalizadoBtnText: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
 });

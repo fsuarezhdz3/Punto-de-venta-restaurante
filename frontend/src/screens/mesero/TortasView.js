@@ -195,6 +195,7 @@ export default function TortasView({ onVolverMenu }) {
           const extrasAdicionales = p.extras.map((e) => e.nombre).join(', ');
 
           return {
+            id_alimento: p.torta?.id || null,
             alimento: p.torta.nombre,
             costo: costoPaquete,
             extras: extrasAdicionales || '',

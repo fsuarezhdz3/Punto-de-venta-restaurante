@@ -37,6 +37,24 @@ const asegurarColumnasMigracion = async () => {
   try { await db.query('ALTER TABLE egresos ADD COLUMN total_egreso DECIMAL(10,2) DEFAULT 0.00'); } catch (e) {}
   try { await db.query('ALTER TABLE egresos ADD COLUMN total_ingreso DECIMAL(10,2) DEFAULT 0.00'); } catch (e) {}
   try { await db.query('ALTER TABLE egresos ADD COLUMN corte_id INT DEFAULT NULL'); } catch (e) {}
+
+  // Asegurar tabla pagos
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS pagos (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        num_orden INT NOT NULL,
+        corte_id INT NOT NULL,
+        monto DECIMAL(10,2) NOT NULL,
+        metodo_pago VARCHAR(50) NOT NULL,
+        monto_recibido DECIMAL(10,2) NULL,
+        cambio DECIMAL(10,2) DEFAULT 0.00,
+        referencia VARCHAR(100) NULL,
+        cuenta INT NULL,
+        fecha DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+  } catch (e) {}
 };
 
 // GET /api/cortes/activo/:cuenta_id
@@ -49,7 +67,7 @@ const getCorteActivo = async (req, res) => {
     await asegurarColumnasMigracion();
 
     const [cortesActivos] = await db.query(
-      `SELECT * FROM cortes WHERE cuenta = ? AND (hora_fin IS NULL OR hora_fin = '0000-00-00 00:00:00') ORDER BY id DESC LIMIT 1`,
+      `SELECT * FROM cortes WHERE cuenta = ? AND (hora_fin IS NULL OR CAST(hora_fin AS CHAR) LIKE '0000-00-00%') ORDER BY id DESC LIMIT 1`,
       [cuentaIdFinal]
     );
 
@@ -66,23 +84,42 @@ const getCorteActivo = async (req, res) => {
     let totalTransferencia = 0;
 
     try {
-      const [ventasRows] = await db.query(
+      const [pagosRows] = await db.query(
         `SELECT 
-          SUM(ap.costo) as total_ventas,
-          SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo,
-          SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'tarjeta' THEN ap.costo ELSE 0 END) as total_tarjeta,
-          SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'transferencia' THEN ap.costo ELSE 0 END) as total_transferencia
-         FROM alimentos_pedidos ap
-         INNER JOIN pedidos p ON ap.num_orden = p.num_orden
-         WHERE p.corte = ? AND ap.estado = 4`,
+          COALESCE(SUM(monto), 0) as total_ventas,
+          COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'efectivo' THEN monto ELSE 0 END), 0) as total_efectivo,
+          COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'tarjeta' THEN monto ELSE 0 END), 0) as total_tarjeta,
+          COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'transferencia' THEN monto ELSE 0 END), 0) as total_transferencia,
+          COUNT(*) as total_pagos
+         FROM pagos
+         WHERE corte_id = ?`,
         [corte.id]
       );
 
-      if (ventasRows.length > 0) {
-        totalVentas = Number(ventasRows[0].total_ventas) || 0;
-        totalEfectivo = Number(ventasRows[0].total_efectivo) || 0;
-        totalTarjeta = Number(ventasRows[0].total_tarjeta) || 0;
-        totalTransferencia = Number(ventasRows[0].total_transferencia) || 0;
+      if (pagosRows.length > 0 && Number(pagosRows[0].total_pagos) > 0) {
+        totalVentas = Number(pagosRows[0].total_ventas) || 0;
+        totalEfectivo = Number(pagosRows[0].total_efectivo) || 0;
+        totalTarjeta = Number(pagosRows[0].total_tarjeta) || 0;
+        totalTransferencia = Number(pagosRows[0].total_transferencia) || 0;
+      } else {
+        const [ventasRows] = await db.query(
+          `SELECT 
+            SUM(ap.costo) as total_ventas,
+            SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo,
+            SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'tarjeta' THEN ap.costo ELSE 0 END) as total_tarjeta,
+            SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'transferencia' THEN ap.costo ELSE 0 END) as total_transferencia
+           FROM alimentos_pedidos ap
+           INNER JOIN pedidos p ON ap.num_orden = p.num_orden
+           WHERE p.corte = ? AND ap.estado = 4`,
+          [corte.id]
+        );
+
+        if (ventasRows.length > 0) {
+          totalVentas = Number(ventasRows[0].total_ventas) || 0;
+          totalEfectivo = Number(ventasRows[0].total_efectivo) || 0;
+          totalTarjeta = Number(ventasRows[0].total_tarjeta) || 0;
+          totalTransferencia = Number(ventasRows[0].total_transferencia) || 0;
+        }
       }
     } catch (vErr) {
       console.log('Aviso consultando ventas del corte:', vErr.message);
@@ -177,7 +214,7 @@ const iniciarCorte = async (req, res) => {
 
     // Verificar que no haya un corte abierto actualmente
     const [activos] = await db.query(
-      `SELECT id FROM cortes WHERE cuenta = ? AND (hora_fin IS NULL OR hora_fin = '0000-00-00 00:00:00')`,
+      `SELECT id FROM cortes WHERE cuenta = ? AND (hora_fin IS NULL OR CAST(hora_fin AS CHAR) LIKE '0000-00-00%')`,
       [cuentaIdFinal]
     );
 
@@ -273,19 +310,34 @@ const cerrarCorte = async (req, res) => {
     let totalEfectivo = 0;
 
     try {
-      const [ventasRows] = await db.query(
+      const [pagosRows] = await db.query(
         `SELECT 
-          SUM(ap.costo) as total_ventas,
-          SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo
-         FROM alimentos_pedidos ap
-         INNER JOIN pedidos p ON ap.num_orden = p.num_orden
-         WHERE p.corte = ? AND ap.estado = 4`,
+          COALESCE(SUM(monto), 0) as total_ventas,
+          COALESCE(SUM(CASE WHEN LOWER(metodo_pago) = 'efectivo' THEN monto ELSE 0 END), 0) as total_efectivo,
+          COUNT(*) as total_pagos
+         FROM pagos
+         WHERE corte_id = ?`,
         [id]
       );
 
-      if (ventasRows.length > 0) {
-        totalVentas = Number(ventasRows[0].total_ventas) || 0;
-        totalEfectivo = Number(ventasRows[0].total_efectivo) || 0;
+      if (pagosRows.length > 0 && Number(pagosRows[0].total_pagos) > 0) {
+        totalVentas = Number(pagosRows[0].total_ventas) || 0;
+        totalEfectivo = Number(pagosRows[0].total_efectivo) || 0;
+      } else {
+        const [ventasRows] = await db.query(
+          `SELECT 
+            SUM(ap.costo) as total_ventas,
+            SUM(CASE WHEN LOWER(COALESCE(ap.metodo_pago, 'efectivo')) = 'efectivo' THEN ap.costo ELSE 0 END) as total_efectivo
+           FROM alimentos_pedidos ap
+           INNER JOIN pedidos p ON ap.num_orden = p.num_orden
+           WHERE p.corte = ? AND ap.estado = 4`,
+          [id]
+        );
+
+        if (ventasRows.length > 0) {
+          totalVentas = Number(ventasRows[0].total_ventas) || 0;
+          totalEfectivo = Number(ventasRows[0].total_efectivo) || 0;
+        }
       }
     } catch (vErr) {}
 
