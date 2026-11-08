@@ -1,9 +1,18 @@
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-// Obtiene dinámicamente la IP de la computadora desde Expo Go para dispositivos físicos y emuladores
+// IP fija alta recomendada para la laptop servidora (rango alto en subred 192.168.100.X para prevenir conflictos DHCP)
+export const DEFAULT_SERVER_IP = '192.168.100.200';
+export const DEFAULT_API_URL = `http://${DEFAULT_SERVER_IP}:3000/api`;
+
+// Obtiene dinámicamente o por configuración la URL del Backend
 const getBackendUrl = () => {
-  // En Web (PC o móvil abriendo en navegador por IP local ej. 192.168.X.X:8081)
+  // 1. Prioridad: Variable de entorno inyectada durante compilación por Expo (.env)
+  if (process.env.EXPO_PUBLIC_API_URL) {
+    return process.env.EXPO_PUBLIC_API_URL;
+  }
+
+  // 2. En Web (PC o móvil abriendo en navegador por IP local ej. 192.168.X.X:8081 o Electron 127.0.0.1)
   if (Platform.OS === 'web' && typeof window !== 'undefined' && window.location?.hostname) {
     const hostname = window.location.hostname;
     if (hostname && hostname !== '') {
@@ -11,19 +20,15 @@ const getBackendUrl = () => {
     }
   }
 
-  // En Expo Go, manifest.hostUri contiene "IP:PUERTO" de Metro (ej. "192.168.1.15:8081")
+  // 3. En Expo Go (desarrollo móvil sincronizado con Metro)
   const hostUri = Constants.expoConfig?.hostUri || Constants.manifest?.hostUri;
-
   if (hostUri) {
     const ip = hostUri.split(':')[0];
     return `http://${ip}:3000/api`;
   }
 
-  // Fallbacks
-  if (Platform.OS === 'android') {
-    return 'http://10.0.2.2:3000/api';
-  }
-  return 'http://localhost:3000/api';
+  // 4. Standalone APK para celular físico en producción
+  return DEFAULT_API_URL;
 };
 
 export const API_URL = getBackendUrl();
