@@ -2,7 +2,7 @@
 -- BASE DE DATOS: pos_lacocina
 -- =============================================
 CREATE DATABASE IF NOT EXISTS pos_lacocina CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE pos_lacocina;
+USE lacocinademiama;
 
 -- =============================================
 -- TABLA: cuentas 
@@ -197,7 +197,8 @@ INSERT INTO cuentas (nombre, contrasena, tipo) VALUES
 ('mesero1',    '$2a$10$eKh9KWjvaIiZs/SDIJ7D.OK64R0ra1SOLadflj3m6pxdawJVRvcCC', 'mesero'),
 ('barra1',     '$2a$10$Ga8/WiujKtA8Pl8oBAJpE.KQ3eHWrtlddXgxhad5DAA.2WzxM7HUe', 'barra'),
 ('cocina1',    '$2a$10$sbDfs5ORGYguFwzER/XaO.dUQGI5JB.KIh9.ePCH8lyT1mDKIu.yq', 'cocina'),
-('comal1',     '$2a$10$1TdO79JwYCXqP2tQvl0g/u.HaHtT8mAzc5DK6Rxq.8RBIdemjki3u', 'comal')
+('comal1',        '$2a$10$1TdO79JwYCXqP2tQvl0g/u.HaHtT8mAzc5DK6Rxq.8RBIdemjki3u', 'comal'),
+('desarrollador', '$2a$10$taf.AHBTshN5y8iJ3l4sWOeCfuWed/ioo5ev4CTYRUda.PWENr4/q', 'desarrollador')
 ON DUPLICATE KEY UPDATE contrasena=VALUES(contrasena), tipo=VALUES(tipo);
 
 -- =============================================
