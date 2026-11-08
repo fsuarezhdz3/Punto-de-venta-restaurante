@@ -1,202 +1,321 @@
-# 📘 Documentación Técnica y Guía de Desarrollo - Sistema POS "La Cocina"
+# Documentación Técnica y Guía de Arquitectura - Sistema POS "La Cocina"
 
-Esta documentación contiene la arquitectura completa del sistema, los flujos de datos principales, el modelo de base de datos y la guía paso a paso para realizar modificaciones o agregar nuevas funcionalidades.
-
----
-
-## 📑 Tabla de Contenidos
-1. [Arquitectura General](#1-arquitectura-general)
-2. [Estructura del Proyecto y Archivos Clave](#2-estructura-del-proyecto-y-archivos-clave)
-3. [Modelo de Datos y Base de Datos (MySQL)](#3-modelo-de-datos-y-base-de-datos-mysql)
-4. [Flujo Detallado de una Orden / Pedido](#4-flujo-detallado-de-una-orden--pedido)
-5. [Roles y Permisos del Sistema](#5-roles-y-permisos-del-sistema)
-6. [Guía para Desarrolladores (Cómo Realizar Modificaciones)](#6-guía-para-desarrolladores-cómo-realizar-modificaciones)
+Esta documentación técnica contiene la arquitectura del sistema, los flujos de datos transaccionales, el modelo relacional de base de datos MySQL y la guía para desarrolladores sobre cómo extender y mantener el sistema.
 
 ---
 
-## 1. Arquitectura General
+## Tabla de Contenidos
 
-El sistema sigue una arquitectura **Cliente-Servidor (Decoupled REST API)**:
+1. [Arquitectura del Sistema](#1-arquitectura-del-sistema)
+2. [Estructura del Proyecto y Módulos](#2-estructura-del-proyecto-y-módulos)
+3. [Modelo de Datos Relacional (MySQL)](#3-modelo-de-datos-relacional-mysql)
+4. [Flujos de Negocio y Transaccionales](#4-flujos-de-negocio-y-transaccionales)
+5. [Roles y Matriz de Permisos](#5-roles-y-matriz-de-permisos)
+6. [Empaquetado y Despliegue (Escritorio y Móvil)](#6-empaquetado-y-despliegue-escritorio-y-móvil)
+7. [Guía para Desarrolladores](#7-guía-para-desarrolladores)
 
+---
+
+## 1. Arquitectura del Sistema
+
+El sistema implementa una arquitectura **Cliente-Servidor Desacoplada (Decoupled REST API)** con soporte multi-plataforma:
+
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        CAPA DE PRESENTACIÓN                            │
+│                                                                        │
+│  [Escritorio Windows]       [Navegador Web]       [Dispositivos Móviles]
+│  Electron (.exe nativo)     React Native Web      Android (.apk con Expo)
+│           │                        │                         │         
+└───────────┴────────────────────────┼─────────────────────────┴─────────┘
+                                     │ Peticiones HTTP REST / JSON
+                                     │ Autenticación JWT Bearer
+┌────────────────────────────────────▼───────────────────────────────────┐
+│                          CAPA DE SERVICIOS                             │
+│                                                                        │
+│                      Servidor Node.js + Express                        │
+│  - Middlewares de Autenticación, Seguridad CORS y Manejo de Errores     │
+│  - Controladores: Alimentos, Pedidos, Cortes, Pagos, Auth, SuperAdmin   │
+│  - Sistema Centralizado de Registro de Eventos (Logger / Error_Logs)   │
+└────────────────────────────────────┬───────────────────────────────────┘
+                                     │ Consultas SQL (mysql2/promise pool)
+┌────────────────────────────────────▼───────────────────────────────────┐
+│                     CAPA DE DATOS Y PERSISTENCIA                       │
+│                                                                        │
+│                         Base de Datos MySQL                            │
+│                           (pos_lacocina)                               │
+└────────────────────────────────────────────────────────────────────────┘
 ```
-┌────────────────────────────────────────────────────────┐
-│             FRONTEND (React Native / Expo)             │
-│  - Web (PC/Laptop)  - Móvil (Android/iOS / Expo Go)  │
-│  - AuthContext (JWT) - MeseroContext (Borrador Orden)  │
-└──────────────────────────┬─────────────────────────────┘
-                           │ HTTP REST (fetch / JSON)
-┌──────────────────────────▼─────────────────────────────┐
-│               BACKEND (Node.js + Express)              │
-│  - Express Controllers & Routes                        │
-│  - JWT Middleware (authMiddleware)                     │
-│  - Connection Pool (mysql2/promise)                    │
-└──────────────────────────┬─────────────────────────────┘
-                           │ SQL Queries
-┌──────────────────────────▼─────────────────────────────┐
-│                 BASE DE DATOS (MySQL)                  │
-│  - DB: lacocinademiama                                 │
-└────────────────────────────────────────────────────────┘
-```
 
-- **Sincronización en Tiempo Real**: Las pantallas del mesero, cocina, comal, barra y administración sincronizan datos mediante sondeo periódico (*polling*) automático en `useEffect` invocando los endpoints REST.
-- **Persistencia de Sesión**: Los tokens JWT y datos de usuario se almacenan en `AsyncStorage` / `localStorage` a través del contexto global `AuthContext`.
+- **Sincronización de Comandas**: Las terminales de meseros, cocina, comal, barra y caja se actualizan mediante sondeo periódico optimizado (*polling*) contra la API REST.
+- **Persistencia de Sesión**: Los tokens JWT y las credenciales se almacenan en `AsyncStorage` / `localStorage` a través del contexto global `AuthContext`.
+- **Registro Centralizado de Errores**: Tanto el frontend (mediante `ErrorBoundary` y `errorReporter`) como el backend envían excepciones no controladas a la tabla `error_logs` y a los archivos de registro diario en `backend/logs/`.
 
 ---
 
-## 2. Estructura del Proyecto y Archivos Clave
+## 2. Estructura del Proyecto y Módulos
 
-### 📂 Backend (`/backend`)
-- **`src/server.js`**: Punto de entrada del servidor Express. Inicializa middlewares globales (CORS, JSON Parser) y monta las rutas.
-- **`src/config/db.js`**: Configuración del *Pool de Conexiones* MySQL usando `mysql2/promise`.
+### Backend (`/backend`)
+- **`src/server.js`**: Inicializa la aplicación Express, monta las rutas de la API, habilita el analizador JSON, CORS y el interceptor global de excepciones.
+- **`src/config/db.js`**: Gestiona el pool de conexiones a MySQL usando `mysql2/promise` con reconexión automática.
 - **`src/routes/`**:
-  - `authRoutes.js`: Rutas de inicio de sesión (`/api/auth/login`).
-  - `alimentosRoutes.js`: CRUD de platillos y menú del día (`/api/alimentos`).
-  - `pedidosRoutes.js`: Levantamiento, actualización de estatus y cancelación de comandas (`/api/pedidos`).
-  - `cortesRoutes.js`: Generación e historial de cortes de caja (`/api/cortes`).
-  - `superadminRoutes.js`: Gestión de usuarios y reportes globales (`/api/superadmin`).
-- **`src/controllers/`**: Contiene la lógica de negocio y las consultas SQL de cada módulo.
-- **`schema.sql`**: Script SQL para crear las tablas e insertar datos iniciales.
+  - `authRoutes.js`: Inicio de sesión y validación de credenciales (`/api/auth`).
+  - `alimentosRoutes.js`: Gestión del catálogo de alimentos, menú del día e imágenes (`/api/alimentos`).
+  - `pedidosRoutes.js`: Creación de comandas, cambio de estatus por zona, pedidos personalizados y cancelaciones (`/api/pedidos`).
+  - `cortesRoutes.js`: Apertura, consulta activa, registro de pagos y cierre de cortes de caja (`/api/cortes`).
+  - `superadminRoutes.js`: CRUD de cuentas de usuario, filtros de catálogo y reportes de ventas (`/api/superadmin`).
+  - `logsRoutes.js`: Consulta y recepción de errores de cliente y servidor (`/api/logs`).
+- **`src/controllers/`**: Implementa la lógica de negocio, validaciones y transacciones de base de datos.
+- **`src/utils/logger.js`**: Módulo para persistir trazas de errores en base de datos y archivos de registro.
+- **`schema.sql`**: Script DDL y DML para estructuración de tablas y datos semilla iniciales.
+- **`instalar_arranque_automatico.bat` / `desinstalar_arranque_automatico.bat`**: Scripts para gestionar el arranque silencioso del backend con el inicio de sesión de Windows.
 
-### 📂 Frontend (`/frontend`)
-- **`src/config/api.js`**: Define la URL base del backend (`API_URL`).
-- **`src/context/AuthContext.js`**: Maneja el estado de inicio de sesión, token JWT y datos del usuario.
-- **`src/context/MeseroContext.js`**: Almacena el borrador de la comanda activa del mesero por mesa/cliente.
+### Frontend (`/frontend`)
+- **`src/config/api.js`**: Resolución dinámica del endpoint API según la plataforma (Web local, Electron `127.0.0.1`, Expo Go o APK con IP fija).
+- **`src/context/`**:
+  - `AuthContext.js`: Maneja el ciclo de vida del token JWT, rol de usuario e inicio/cierre de sesión.
+  - `MeseroContext.js`: Almacena el borrador de comanda activa por mesa, cálculo de subtotales y configuración de modificadores/paquetes.
+- **`src/components/`**:
+  - `ModalCalendarioRango.js`: Selector interactivo de rango de fechas con calendario visual y filtros rápidos.
+  - `ModalGeneradorMenu.js`: Diseñador gráfico para exportación en alta resolución de la imagen del Menú del Día.
+  - `ModalPedidoEspecial.js`: Formulario para captura rápida de platillos fuera de carta o personalizados.
+  - `ModalTicketPreview.js`: Previsualización interactiva del ticket de venta antes de su impresión física.
+  - `ErrorBoundary.js`: Componente contenedor para atrapar fallos de renderizado en React y reportarlos al backend.
 - **`src/screens/`**:
-  - `LoginScreen.js`: Pantalla de login universal.
-  - `HomeScreen.js`: Enrutador dinámico que redirige según el rol del usuario autenticado.
-  - `mesero/`: Vistas de selección de platillos (`ComidaView.js`, `DesayunosView.js`, `AntojitosView.js`, `BebidasView.js`, etc.), modales de paquete (`FormularioDesayunoModal.js`) y pestañas (`MesasTab.js`, `MenuTab.js`, `OrdenesTab.js`).
-  - `cocina/CocinaHomeScreen.js`: Monitor de preparación para platillos de **Cocina**.
-  - `comal/ComalHomeScreen.js`: Monitor de preparación para antjitos/guisados del **Comal**.
-  - `barra/BarraHomeScreen.js`: Monitor de preparación para bebidas/despacho de **Barra**.
-  - `admin/AdminHomeScreen.js`: Panel de caja, menú del día, cobros e impresión de tickets.
-  - `superadmin/SuperAdminHomeScreen.js`: Panel de gestión de usuarios, catálogo completo y ventas.
-- **`src/services/ticketService.js`**: Generación y formateo de tickets para impresión.
+  - `LoginScreen.js`: Pantalla de autenticación universal para todos los roles.
+  - `HomeScreen.js`: Enrutador que despacha la vista de inicio según el rol autenticado.
+  - `admin/AdminHomeScreen.js`: Panel de caja, menú del día, cobro mixto/parcial, reimpresión y arqueos de corte.
+  - `superadmin/SuperAdminHomeScreen.js`: Panel administrativo con estadísticas de ventas, histórico de cortes, rankings de productos y gestión de usuarios.
+  - `mesero/`: Pantallas de captura organizadas por categoría (`ComidaView.js`, `DesayunosView.js`, `AntojitosView.js`, `BebidasView.js`, `OtrosView.js`, etc.) y pestañas (`MesasTab.js`, `MenuTab.js`, `OrdenesTab.js`).
+  - `cocina/`, `comal/`, `barra/`: Monitores en tiempo real para preparación y despacho por estación de trabajo.
+- **`electron-main.js`**: Proceso principal de Electron con servidor estático local para ejecución como aplicación de escritorio nativa de Windows.
 
 ---
 
-## 3. Modelo de Datos y Base de Datos (MySQL)
+## 3. Modelo de Datos Relacional (MySQL)
 
-### Tablas Principales:
+La base de datos se denomina **`pos_lacocina`** y cuenta con integridad referencial mediante claves foráneas con eliminación en cascada donde corresponde:
 
-1. **`alimentos`**:
-   - `id`: INT (PK, Auto-increment)
-   - `nombre`: VARCHAR(100)
-   - `tipo`: ENUM/VARCHAR ('Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros')
-   - `precio`: DECIMAL(10,2) (Precio regular)
-   - `precio_paquete`: DECIMAL(10,2) (Precio especial si aplica en paquete)
-   - `precio_antojito`: DECIMAL(10,2) (Precio especial en antojitos)
-   - `zona`: ENUM ('cocina', 'comal', 'barra')
-   - `estado`: TINYINT (1: Disponible, 0: Agotado)
-   - `aplica_paquete`: TINYINT (1: Aplica para paquetes de bebida/litro, 0: No)
-   - `aplica_paquete_antojito`: TINYINT (1: Aplica como guisado para antojitos, 0: No)
-
-2. **`usuarios`**:
-   - `id`: INT (PK)
-   - `nombre`: VARCHAR(50) (Nombre de usuario para login)
-   - `contrasena`: VARCHAR(255) (Hash Bcrypt)
-   - `tipo`: ENUM ('mesero', 'admin', 'barra', 'cocina', 'comal', 'superadmin')
-   - `bloqueo`: TINYINT (0: Activo, 1: Bloqueado)
-
-3. **`pedidos`**:
-   - `id`: INT (PK)
-   - `mesa`: VARCHAR(50)
-   - `cliente`: VARCHAR(100)
-   - `estatus`: ENUM ('pendiente', 'listo', 'pagado', 'cancelado')
-   - `total`: DECIMAL(10,2)
-   - `mesero_id`: INT (FK a usuarios)
-   - `creado_en`: DATETIME
-
-4. **`detalle_pedidos`**:
-   - `id`: INT (PK)
-   - `pedido_id`: INT (FK a pedidos)
-   - `alimento_id`: INT (FK a alimentos)
-   - `nombre`: VARCHAR(100)
-   - `cantidad`: INT
-   - `precio_unitario`: DECIMAL(10,2)
-   - `subtotal`: DECIMAL(10,2)
-   - `comentario`: TEXT (Modificadores como "sin cebolla", "salsa verde", etc.)
-   - `zona`: ENUM ('cocina', 'comal', 'barra')
-   - `estatus_item`: ENUM ('pendiente', 'listo', 'cancelado')
-
----
-
-## 4. Flujo Detallado de una Orden / Pedido
-
+```text
+┌─────────────────┐       ┌─────────────────┐       ┌─────────────────┐
+│     cuentas     │◄──────┤     pedidos     │◄──────┤ alimentos_pedidos│
+│ (usuarios/roles)│       │ (comandas/mesas)│       │ (ítems de orden)│
+└────────┬────────┘       └────────┬────────┘       └─────────────────┘
+         │                         │
+         │                         │
+         ▼                         ▼
+┌─────────────────┐       ┌─────────────────┐
+│     cortes      │◄──────┤      pagos      │
+│(arqueo de caja) │       │(efectivo/tarjeta│
+└─────────────────┘       │    mixto)       │
+                          └─────────────────┘
 ```
-[Mesero] ──(1) Selecciona Mesa & Platillos──> [MeseroContext] (Guardado Local)
+
+### Detalle de Tablas Principales
+
+#### 1. `cuentas`
+Almacena los usuarios con acceso al sistema:
+- `id`: INT (PK, Auto-increment).
+- `nombre`: VARCHAR(50) (Nombre de usuario único para inicio de sesión).
+- `contrasena`: VARCHAR(255) (Hash criptográfico generado con Bcrypt, rounds=10).
+- `tipo`: ENUM (`'superadmin'`, `'admin'`, `'mesero'`, `'barra'`, `'cocina'`, `'comal'`).
+- `estado`: BOOLEAN (Indica si la cuenta está habilitada).
+- `bloqueo`: BOOLEAN (Bloqueo manual por seguridad tras intentos fallidos o decisión administrativa).
+
+#### 2. `alimentos`
+Catálogo general de platillos y bebidas:
+- `id`: INT (PK, Auto-increment).
+- `nombre`: VARCHAR(100) (Nombre del producto).
+- `tipo`: VARCHAR(50) (`'Comida'`, `'Desayuno'`, `'Antojito'`, `'Bebida'`, `'Entrada'`, `'Litros'`, `'Postre'`, `'Torta'`, `'Extra'`, `'Otros'`).
+- `precio`: DECIMAL(10,2) (Precio de venta estándar).
+- `precio_paquete`: DECIMAL(10,2) (Precio preferencial si se solicita en paquete).
+- `precio_antojito`: DECIMAL(10,2) (Precio asignado en modalidad de antojito).
+- `zona`: ENUM (`'cocina'`, `'comal'`, `'barra'`) (Estación encargada de la preparación).
+- `estado`: BOOLEAN (Disponibilidad en almacén: 1 disponible, 0 agotado).
+- `aplica_paquete`: BOOLEAN (Permite agregarse como complemento de bebida/litro).
+- `aplica_paquete_antojito`: BOOLEAN (Permite seleccionarse como guisado en antojitos).
+
+#### 3. `pedidos`
+Comandas generales levantadas por mesa o para llevar:
+- `num_orden`: INT (PK, Auto-increment).
+- `num_mesa`: VARCHAR(20) (Identificador de la mesa o "Para Llevar").
+- `cliente`: VARCHAR(100) (Nombre del comensal o referencia).
+- `estado`: INT (0: En preparación, 1: Servido/Listo para cobrar, 2: Cobrado/Completado, 3: Cancelado).
+- `total`: DECIMAL(10,2) (Monto total acumulado de la comanda).
+- `fecha_pedido`: DATETIME (Marca de tiempo de registro).
+- `fecha_completado`: DATETIME (Marca de tiempo en que se realizó el cobro o cancelación).
+- `metodo_pago`: VARCHAR(50) (`'efectivo'`, `'tarjeta'`, `'transferencia'`, `'mixto'`).
+- `comentarios`: VARCHAR(200) (Observaciones de cobro o justificación obligatoria al editar/cancelar).
+- `cuenta`: INT (FK a `cuentas.id`, mesero que registró la orden).
+
+#### 4. `alimentos_pedidos`
+Desglose individual de cada platillo solicitado dentro de una orden:
+- `id`: INT (PK, Auto-increment).
+- `num_orden`: INT (FK a `pedidos.num_orden` con `ON DELETE CASCADE`).
+- `alimento`: VARCHAR(100) (Nombre del ítem).
+- `costo`: DECIMAL(10,2) (Precio cobrado por el ítem).
+- `estado`: INT (0: Enviado a preparación, 1: Listo en estación, 2: Servido al cliente, 3: Cobrado individualmente, 4: Cancelado).
+- `guarnicion1`, `guarnicion2`, `entrada`, `bebida`, `guiso`: VARCHAR(150) (Selecciones en paquetes o modalidades combinadas).
+- `extras`: VARCHAR(500) (Adicionales pagados).
+- `comentarios`: VARCHAR(300) (Instrucciones específicas como "sin cebolla", "salsa aparte").
+- `personalizado`: BOOLEAN (Indica si el alimento corresponde a una orden especial fuera de carta).
+- `cuenta`: INT (FK a `cuentas.id`, mesero que solicitó el ítem específico).
+
+#### 5. `cortes`
+Registros de turnos y arqueos de caja:
+- `id`: INT (PK, Auto-increment).
+- `dinero_inicial`: DECIMAL(10,2) (Fondo de caja inicial asignado).
+- `hora_inicio`: DATETIME (Apertura de turno).
+- `hora_fin`: DATETIME (Cierre de turno).
+- `total_corte`: DECIMAL(10,2) (Total de ventas cobradas durante el corte).
+- `cuenta`: INT (FK a `cuentas.id`, usuario que abrió y cerró el corte).
+
+#### 6. `pagos`
+Transacciones de cobro desglosadas por método de pago:
+- `id`: INT (PK, Auto-increment).
+- `num_orden`: INT (FK a `pedidos.num_orden` con `ON DELETE CASCADE`).
+- `corte_id`: INT (FK a `cortes.id` con `ON DELETE CASCADE`).
+- `monto`: DECIMAL(10,2) (Importe aplicado al saldo).
+- `metodo_pago`: VARCHAR(50) (`'efectivo'`, `'tarjeta'`, `'transferencia'`).
+- `monto_recibido`: DECIMAL(10,2) (Dinero físico entregado por el cliente).
+- `cambio`: DECIMAL(10,2) (Cambio devuelto en efectivo).
+- `referencia`: VARCHAR(100) (Número de voucher o comprobante de transferencia).
+- `cuenta`: INT (FK a `cuentas.id`, cajero que procesó el pago).
+- `fecha`: DATETIME (Marca de tiempo del movimiento).
+
+#### 7. `ingresos` y `egresos`
+Movimientos manuales de entrada o retiro de efectivo en caja:
+- `id`: INT (PK, Auto-increment).
+- `corte_id`: INT (FK a `cortes.id`).
+- `total_ingreso`: DECIMAL(10,2) (Importe del movimiento).
+- `concepto`: VARCHAR(100) (Justificación del movimiento de caja chica).
+- `fecha`: DATETIME.
+
+#### 8. `menu_diseno`
+Configuración persistente para el diseñador de imagen del Menú del Día:
+- `id`: INT (PK, Auto-increment).
+- `nombre`: VARCHAR(50).
+- `imagen_fondo`: LONGTEXT (Ruta relativa o URL de la plantilla gráfica).
+- `config_bloques`: LONGTEXT (Estructura JSON con coordenadas, tipografía y colores de los cuadros de texto).
+- `fecha_actualizacion`: DATETIME.
+
+#### 9. `error_logs`
+Registro centralizado de excepciones y fallas del sistema:
+- `id`: INT (PK, Auto-increment).
+- `origen`: VARCHAR(50) (`FRONTEND_ERROR_BOUNDARY`, `BACKEND_EXPRESS`, etc.).
+- `mensaje`: TEXT.
+- `detalle`: LONGTEXT (Stack trace completo).
+- `ruta`: VARCHAR(255).
+- `metodo`: VARCHAR(10).
+- `usuario`: JSON.
+- `extra`: JSON.
+- `creado_en`: DATETIME.
+
+---
+
+## 4. Flujos de Negocio y Transaccionales
+
+### Ciclo de Vida de una Comanda
+
+```text
+[Mesero]
    │
-   ├──(2) Presiona "Enviar Pedido" ──> POST /api/pedidos
-   │                                         │
-   │                                         ├──(3) Guarda en DB (pedidos & detalle_pedidos)
-   │                                         │
-   ▼                                         ▼
-[Monitor Mesero]                     [Ruteo por Zona]
- (Muestra estatus de orden)         ├── zona = 'cocina' ──> [CocinaHomeScreen]
-                                     ├── zona = 'comal'  ──> [ComalHomeScreen]
-                                     └── zona = 'barra'  ──> [BarraHomeScreen]
-                                               │
-                                               └──(4) Marcar "Listo" ──> PUT /api/pedidos/items/:id
-                                                         │
-                                                         ▼
-                                               [AdminHomeScreen]
-                                                ├──(5) Cobrar Cuenta ──> PUT /api/pedidos/:id (pagado)
-                                                └──(6) Genera Ticket & Registro en Corte de Caja
+   ├── 1. Selecciona Mesa y Comensal
+   ├── 2. Agrega Platillos regulares, paquetes o "Pedido Personalizado"
+   ├── 3. Envía Comanda ──► POST /api/pedidos
+                                 │
+                                 ├── Guarda en `pedidos` y `alimentos_pedidos`
+                                 └── Rutea cada ítem por su columna `zona`:
+                                       ├── zona = 'cocina' ──► CocinaHomeScreen
+                                       ├── zona = 'comal'  ──► ComalHomeScreen
+                                       └── zona = 'barra'  ──► BarraHomeScreen
+[Estaciones de Preparación]
+   │
+   └── 4. Preparador pulsa "Listo" ──► PUT /api/pedidos/items/:id (estado = 1)
+
+[Caja / Administrador]
+   │
+   ├── 5. Cliente solicita cuenta
+   ├── 6. Admin registra cobro total o parcial (Efectivo, Tarjeta, Transferencia o Mixto)
+   │        └── Registra en tabla `pagos` vinculado al corte activo
+   └── 7. Genera e imprime ticket físico térmico vía Windows Spooler
 ```
 
----
-
-## 5. Roles y Permisos del Sistema
-
-- 🟢 **Mesero**: Crea comandas, selecciona mesas, agrega comentarios/opciones y consulta el avance de los platillos.
-- 👨‍🍳 **Cocina**: Visualiza en tiempo real los platillos en cola de la zona `cocina` y los marca como listos.
-- 🫓 **Comal**: Visualiza en tiempo real antojitos y guisados de la zona `comal`.
-- 🥤 **Barra**: Visualiza bebidas, postres y litros de la zona `barra`.
-- 👔 **Admin**: Administra el Menú del Día, realiza edición masiva de precios, cobra cuentas, imprime tickets y efectúa cortes de caja.
-- ⚡ **SuperAdmin**: Acceso absoluto: gestión CRUD de cuentas de usuario, catálogo general de platillos y estadísticas de ventas.
+### Sistema de Pagos Mixtos y Arqueo Exacto
+El arqueo de caja física solo contabiliza el efectivo real recibido. Cuando un comensal paga una cuenta con métodos combinados (por ejemplo, parte con tarjeta bancaria y el resto en efectivo con cambio), el sistema registra cada transacción de manera individual en la tabla `pagos`. Esto garantiza que los cortes de caja cuadren exactamente con el dinero en gaveta, sin descuadres por comisiones bancarias ni cobros digitales.
 
 ---
 
-## 6. Guía para Desarrolladores (Cómo Realizar Modificaciones)
+## 5. Roles y Matriz de Permisos
 
-### ❓ Caso 1: Agregar un nuevo Tipo / Categoría de Alimento (Ejemplo: "Sopas")
-1. **Base de Datos**: Si deseas restringir tipos por ENUM en MySQL, actualiza la columna `tipo` en la tabla `alimentos`.
-2. **Frontend - Admin & SuperAdmin**:
-   - En `AdminHomeScreen.js` y `SuperAdminHomeScreen.js`, agrega `'Sopas'` al arreglo de opciones de categoría en el modal del alimento:
-     ```javascript
-     ['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Sopas']
-     ```
-3. **Frontend - Mesero**:
-   - En `frontend/src/screens/mesero/MenuTab.js`, añade el botón o pestaña para la nueva categoría.
-   - Crea un componente `SopasView.js` en `frontend/src/screens/mesero/` (puedes basarte en `EntradasView.js`).
-
----
-
-### ❓ Caso 2: Modificar o Agregar Campos a los Alimentos (Ejemplo: `codigo_barras`)
-1. **MySQL**:
-   ```sql
-   ALTER TABLE alimentos ADD COLUMN codigo_barras VARCHAR(50) DEFAULT NULL;
-   ```
-2. **Backend**:
-   - En `backend/src/controllers/alimentosController.js`, actualiza `crearAlimento` y `editarAlimento` para recibir y guardar `codigo_barras` en la consulta SQL.
-3. **Frontend**:
-   - En `AdminHomeScreen.js` y `SuperAdminHomeScreen.js`:
-     - Agrega la variable de estado `const [formCodigoBarras, setFormCodigoBarras] = useState('');`.
-     - Agrega el `<TextInput>` correspondiente dentro del modal.
-     - Incluye `codigo_barras` en el objeto `payload`.
+| Módulo / Funcionalidad | Mesero | Cocina | Comal | Barra | Admin | SuperAdmin |
+| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| Crear y modificar comandas | Sí | No | No | No | Sí | Sí |
+| Pedidos Personalizados | Sí | No | No | No | Sí | Sí |
+| Marcar platillos como "Listos" | No | Cocina | Comal | Barra | Sí | Sí |
+| Cobro de cuentas y tickets | No | No | No | No | Sí | Sí |
+| Cortes de caja (apertura/cierre) | No | No | No | No | Sí | Sí |
+| Menú del Día y Diseñador gráfico | No | No | No | No | Sí | Sí |
+| Edición masiva de precios | No | No | No | No | Sí | Sí |
+| Estadísticas globales y reportes | No | No | No | No | No | Sí |
+| Gestión de cuentas de usuario | No | No | No | No | No | Sí |
 
 ---
 
-### ❓ Caso 3: Cambiar la Dirección IP o Puerto del Servidor Backend
-- En el frontend, edita el archivo `frontend/src/config/api.js`:
-  ```javascript
-  export const API_URL = 'http://TU_NUEVA_IP:3000/api';
+## 6. Empaquetado y Despliegue (Escritorio y Móvil)
+
+### Aplicación de Escritorio para Windows (.exe)
+Se implementa mediante Electron (`frontend/electron-main.js`):
+- **Carga Local Segura**: Inicia un servidor HTTP ligero interno en `127.0.0.1` para despachar los recursos estáticos generados por Expo Web, eliminando las restricciones de rutas y protocolos `file://`.
+- **Compilación de Producción**:
+  ```bash
+  cd frontend
+  npm run electron:build
+  ```
+  Genera la carpeta portable autocontenida con el ejecutable en:  
+  `frontend/dist-electron/win-unpacked/POS La Cocina de mi Ama.exe`.
+
+### Aplicación Móvil Android (.apk)
+La aplicación para meseros se compila a través de Expo Application Services (EAS):
+- **Permisos de Red Local (Cleartext HTTP)**: En `frontend/app.json` se encuentra habilitada la bandera `"usesCleartextTraffic": true`, permitiendo que el sistema operativo Android autorice las peticiones `http://` a la dirección IP de la computadora servidora sin requerir certificados SSL externos.
+- **Configuración de IP**: En `frontend/.env` se define la variable `EXPO_PUBLIC_API_URL` apuntando a la IP fija del servidor local (ejemplo: `http://192.168.100.200:3000/api`).
+- **Comando de Compilación**:
+  ```bash
+  cd frontend
+  npx eas build -p android --profile preview
   ```
 
+### Inicio Automático del Backend con Windows
+En la computadora servidora, se puede habilitar el arranque transparente del backend cada vez que se inicie sesión en Windows:
+- **Instalar**: Ejecutar con doble clic `backend/instalar_arranque_automatico.bat`.
+- **Desinstalar**: Ejecutar con doble clic `backend/desinstalar_arranque_automatico.bat`.
+- **Registro de actividad**: La salida y posibles errores se guardan automáticamente en `backend/startup.log`.
+
 ---
 
-### ❓ Caso 4: Agregar un Nuevo Rol de Usuario (Ejemplo: "Cajero")
-1. **Backend**:
-   - En `authController.js` y `superadminController.js`, agrega `'cajero'` a los roles permitidos.
-2. **Frontend**:
-   - En `SuperAdminHomeScreen.js`, añade `'cajero'` a la cuadrícula de selección de roles en el modal de cuentas.
-   - En `HomeScreen.js`, agrega el caso para redirigir al usuario con rol `cajero` a su vista correspondiente.
+## 7. Guía para Desarrolladores
+
+### Caso 1: Agregar una Nueva Categoría de Alimentos
+1. **Frontend (Formularios y Filtros de Administración)**:
+   - En `AdminHomeScreen.js` y `SuperAdminHomeScreen.js`, incorpore la nueva categoría en los arrays de selección:
+     ```javascript
+     ['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros', 'NuevaCategoria']
+     ```
+2. **Frontend (Vista para Meseros)**:
+   - En `frontend/src/screens/mesero/MenuTab.js`, agregue el recuadro interactivo correspondiente.
+   - Cree el archivo de vista `frontend/src/screens/mesero/NuevaCategoriaView.js` (basándose en la estructura de `BebidasView.js` u `OtrosView.js`).
+
+### Caso 2: Modificar la Dirección IP del Servidor en Producción
+- En `frontend/.env`, actualice la variable:
+  ```env
+  EXPO_PUBLIC_API_URL=http://NUEVA_IP:3000/api
+  EXPO_PUBLIC_SERVER_IP=NUEVA_IP
+  ```
+- En `frontend/src/config/api.js`, actualice la constante de respaldo `DEFAULT_SERVER_IP`.
+
+### Caso 3: Abrir Puertos en el Firewall para Conexiones Entrantes
+Si se traslada el servidor a una nueva máquina con Windows, ejecute en PowerShell como Administrador:
+```powershell
+New-NetFirewallRule -DisplayName "POS Backend Port 3000" -Direction Inbound -LocalPort 3000 -Protocol TCP -Action Allow
+```
+Asegúrese también de que el perfil de red Wi-Fi en Windows esté configurado como **Red Privada**.
