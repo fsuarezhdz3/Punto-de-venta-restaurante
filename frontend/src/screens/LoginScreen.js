@@ -1,4 +1,4 @@
-import React, { useState, useContext, useRef } from 'react';
+import React, { useState, useContext, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   Text,
@@ -9,6 +9,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Keyboard,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -26,7 +27,62 @@ export default function LoginScreen() {
   const [errorMessage, setErrorMessage] = useState('');
 
   const passwordInputRef = useRef(null);
+  const scrollViewRef = useRef(null);
+  const focusedFieldRef = useRef(null);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+
   const { login } = useContext(AuthContext);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+
+    const onShow = (e) => {
+      setIsKeyboardVisible(true);
+      const h = e?.endCoordinates?.height || 280;
+      setKeyboardHeight(h);
+      setTimeout(() => {
+        if (focusedFieldRef.current === 'password') {
+          scrollViewRef.current?.scrollTo({ y: 190, animated: true });
+        } else if (focusedFieldRef.current === 'usuario') {
+          scrollViewRef.current?.scrollTo({ y: 120, animated: true });
+        }
+      }, 100);
+    };
+
+    const onHide = () => {
+      setIsKeyboardVisible(false);
+      setKeyboardHeight(0);
+      scrollViewRef.current?.scrollTo({ y: 0, animated: true });
+    };
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, onShow);
+    const hideSub = Keyboard.addListener(hideEvent, onHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const handleInputFocus = (field) => {
+    setFocusedField(field);
+    focusedFieldRef.current = field;
+    if (Platform.OS !== 'web') {
+      setTimeout(() => {
+        const scrollY = field === 'password' ? 190 : 120;
+        scrollViewRef.current?.scrollTo({ y: scrollY, animated: true });
+      }, 120);
+    }
+  };
+
+  const handleInputBlur = () => {
+    setFocusedField(null);
+    focusedFieldRef.current = null;
+  };
 
   const handleLogin = async () => {
     if (!usuario.trim() || !password.trim()) {
@@ -54,9 +110,18 @@ export default function LoginScreen() {
         style={styles.keyboardView}
       >
         <ScrollView
-          contentContainerStyle={styles.scrollContent}
+          ref={scrollViewRef}
+          contentContainerStyle={[
+            styles.scrollContent,
+            isKeyboardVisible && styles.scrollContentKeyboardVisible,
+            isKeyboardVisible && {
+              paddingBottom: Platform.OS === 'android' ? (keyboardHeight || 280) + 60 : 60,
+            },
+          ]}
           keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
           showsVerticalScrollIndicator={false}
+          automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
         >
           {/* Header Superior con Logo SVG e Identificación */}
           <View style={styles.headerContainer}>
@@ -99,8 +164,8 @@ export default function LoginScreen() {
                   onChangeText={setUsuario}
                   autoCapitalize="none"
                   returnKeyType="next"
-                  onFocus={() => setFocusedField('usuario')}
-                  onBlur={() => setFocusedField(null)}
+                  onFocus={() => handleInputFocus('usuario')}
+                  onBlur={handleInputBlur}
                   onSubmitEditing={() => passwordInputRef.current?.focus()}
                   onKeyPress={(e) => {
                     if (e.nativeEvent?.key === 'Enter') {
@@ -139,8 +204,8 @@ export default function LoginScreen() {
                   value={password}
                   onChangeText={setPassword}
                   returnKeyType="go"
-                  onFocus={() => setFocusedField('password')}
-                  onBlur={() => setFocusedField(null)}
+                  onFocus={() => handleInputFocus('password')}
+                  onBlur={handleInputBlur}
                   onSubmitEditing={handleLogin}
                   onKeyPress={(e) => {
                     if (e.nativeEvent?.key === 'Enter') {
@@ -225,6 +290,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingVertical: 32,
     backgroundColor: '#FFFFFF',
+  },
+  scrollContentKeyboardVisible: {
+    justifyContent: 'flex-start',
+    paddingTop: 16,
   },
 
   /* Header y Logo */
