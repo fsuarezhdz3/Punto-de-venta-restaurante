@@ -424,7 +424,7 @@ export default function SuperAdminHomeScreen() {
 
   const cargarCatalogoAlimentos = async () => {
     try {
-      const res = await fetch(`${API_URL}/alimentos`);
+      const res = await fetch(`${API_URL}/alimentos/admin/todos`);
       const data = await res.json();
       if (res.ok) {
         const list = data.alimentos || [];
@@ -748,6 +748,47 @@ export default function SuperAdminHomeScreen() {
       }
     } catch (e) {
       Alert.alert('Error', 'No se pudo guardar el alimento.');
+    }
+  };
+
+  // Alternar rápidamente disponibilidad / estado activo (1 <-> 0) directamente desde la tarjeta
+  const handleToggleDisponible = async (item) => {
+    const nuevoEstado = Number(item.estado) === 1 ? 0 : 1;
+    try {
+      const payload = {
+        nombre: item.nombre,
+        tipo: item.tipo,
+        precio: Number(item.precio),
+        precio_paquete: item.precio_paquete,
+        precio_antojito: item.precio_antojito,
+        zona: item.zona,
+        estado: nuevoEstado,
+        aplica_paquete: item.aplica_paquete,
+        aplica_paquete_antojito: item.aplica_paquete_antojito,
+        categorias_extra: item.categorias_extra,
+      };
+
+      setCatalogoAlimentos((prev) =>
+        prev.map((a) => (a.id === item.id ? { ...a, estado: nuevoEstado } : a))
+      );
+
+      const res = await fetch(`${API_URL}/alimentos/${item.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        setCatalogoAlimentos((prev) =>
+          prev.map((a) => (a.id === item.id ? { ...a, estado: item.estado } : a))
+        );
+        Alert.alert('Error', 'No se pudo cambiar el estado del alimento.');
+      }
+    } catch (e) {
+      setCatalogoAlimentos((prev) =>
+        prev.map((a) => (a.id === item.id ? { ...a, estado: item.estado } : a))
+      );
+      Alert.alert('Error', 'Error de red al actualizar disponibilidad.');
     }
   };
 
@@ -1987,10 +2028,17 @@ export default function SuperAdminHomeScreen() {
                       </View>
 
                       <View style={styles.alimentoCardActionsCol}>
-                        <View style={[styles.disponibleBadge, estaDisponible ? styles.disponibleBadgeOk : styles.disponibleBadgeOff]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={[styles.disponibleBadgeText, estaDisponible ? styles.disponibleBadgeTextOk : styles.disponibleBadgeTextOff]}>
-                            {estaDisponible ? 'Disponible' : 'No Disp.'}
+                            {estaDisponible ? 'Activo' : 'Inactivo'}
                           </Text>
+                          <Switch
+                            value={estaDisponible}
+                            onValueChange={() => handleToggleDisponible(item)}
+                            trackColor={{ false: '#CBD5E1', true: '#99F6E4' }}
+                            thumbColor={estaDisponible ? '#0D9488' : '#64748B'}
+                            style={Platform.OS === 'web' ? { cursor: 'pointer', transform: [{ scale: 0.85 }] } : { transform: [{ scaleX: 0.85 }, { scaleY: 0.85 }] }}
+                          />
                         </View>
 
                         <View style={styles.precioYEditRow}>
@@ -2850,6 +2898,26 @@ export default function SuperAdminHomeScreen() {
                     <Text style={[styles.rolOptionText, formZona === z && styles.rolOptionTextActive]}>{z.toUpperCase()}</Text>
                   </TouchableOpacity>
                 ))}
+              </View>
+
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, padding: 12, backgroundColor: formEstado ? '#F0FDFA' : '#F8FAFC', borderRadius: 10, borderWidth: 1.5, borderColor: formEstado ? '#99F6E4' : '#E2E8F0' }}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 14, color: formEstado ? '#0F766E' : '#475569', fontWeight: '800' }}>
+                    {formEstado ? '✅ Alimento Disponible / Activo' : '⛔ Alimento No Disponible / Inactivo'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    {formEstado
+                      ? 'Visible para los meseros al tomar órdenes y disponible para el Menú del Día.'
+                      : 'Oculto para los meseros al tomar órdenes y del diseño del Menú del Día.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={formEstado}
+                  onValueChange={setFormEstado}
+                  trackColor={{ false: '#CBD5E1', true: '#99F6E4' }}
+                  thumbColor={formEstado ? '#0D9488' : '#64748B'}
+                  style={Platform.OS === 'web' ? { cursor: 'pointer' } : undefined}
+                />
               </View>
 
               {Boolean((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) ? (

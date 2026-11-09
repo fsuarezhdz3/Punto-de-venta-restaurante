@@ -3212,13 +3212,23 @@ export default function AdminHomeScreen() {
                 ))}
               </View>
 
-              <View style={styles.switchRow}>
-                <Text style={styles.switchLabel}>Disponible:</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 14, padding: 12, backgroundColor: formEstado ? '#F0FDFA' : '#F8FAFC', borderRadius: 10, borderWidth: 1.5, borderColor: formEstado ? '#99F6E4' : '#E2E8F0' }}>
+                <View style={{ flex: 1, paddingRight: 12 }}>
+                  <Text style={{ fontSize: 14, color: formEstado ? '#0F766E' : '#475569', fontWeight: '800' }}>
+                    {formEstado ? '✅ Alimento Disponible / Activo' : '⛔ Alimento No Disponible / Inactivo'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#64748B', marginTop: 2 }}>
+                    {formEstado
+                      ? 'Visible para los meseros al tomar órdenes y disponible para el Menú del Día.'
+                      : 'Oculto para los meseros al tomar órdenes y del diseño del Menú del Día.'}
+                  </Text>
+                </View>
                 <Switch
                   value={formEstado}
                   onValueChange={setFormEstado}
                   trackColor={{ false: '#CBD5E1', true: '#99F6E4' }}
                   thumbColor={formEstado ? '#0D9488' : '#64748B'}
+                  style={Platform.OS === 'web' ? { cursor: 'pointer' } : undefined}
                 />
               </View>
 
