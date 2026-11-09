@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { API_URL } from '../../config/api';
+import { extraAplicaACategoria } from '../../utils/extrasHelper';
 
 export default function FormularioDesayunoModal({ visible, onClose, onGuardar }) {
   const [loading, setLoading] = useState(false);
@@ -75,7 +76,9 @@ export default function FormularioDesayunoModal({ visible, onClose, onGuardar })
         const bdBebidas = data.alimentos.filter(
           (a) => (a.tipo === 'Bebida' || a.tipo === 'Bebidas') && Number(a.aplica_paquete !== undefined && a.aplica_paquete !== null ? a.aplica_paquete : 1) === 1
         );
-        const bdExtras = data.alimentos.filter((a) => a.tipo === 'Extra');
+        const bdExtras = data.alimentos.filter(
+          (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Desayunos')
+        );
 
         if (bdDesayunos.length > 0) {
           setOpcionesDesayuno(bdDesayunos);

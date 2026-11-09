@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MeseroContext } from '../../context/MeseroContext';
 import { API_URL } from '../../config/api';
+import { extraAplicaACategoria } from '../../utils/extrasHelper';
 
 export default function ComidaView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
@@ -93,7 +94,9 @@ export default function ComidaView({ onVolverMenu }) {
         const bdBebidas = data.alimentos.filter(
           (a) => (a.tipo === 'Bebida' || a.tipo === 'Bebidas') && Number(a.aplica_paquete !== undefined && a.aplica_paquete !== null ? a.aplica_paquete : 1) === 1
         );
-        const bdExtras = data.alimentos.filter((a) => a.tipo === 'Extra');
+        const bdExtras = data.alimentos.filter(
+          (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Comida')
+        );
 
         if (bdEntradas.length > 0) setCatEntradas(bdEntradas);
         if (bdComida.length > 0) setCatPlatosFuertes(bdComida);

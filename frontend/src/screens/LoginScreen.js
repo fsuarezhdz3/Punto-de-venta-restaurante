@@ -1,4 +1,4 @@
-import React, { useState, useContext } from 'react';
+import React, { useState, useContext, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -20,9 +20,12 @@ export default function LoginScreen() {
   const [usuario, setUsuario] = useState('');
   const [password, setPassword] = useState('');
   const [obscurePassword, setObscurePassword] = useState(true);
+  const [recordarme, setRecordarme] = useState(false);
+  const [focusedField, setFocusedField] = useState(null); // 'usuario' | 'password' | null
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
+  const passwordInputRef = useRef(null);
   const { login } = useContext(AuthContext);
 
   const handleLogin = async () => {
@@ -34,7 +37,7 @@ export default function LoginScreen() {
     setIsLoading(true);
     setErrorMessage('');
 
-    const res = await login(usuario.trim(), password.trim());
+    const res = await login(usuario.trim(), password.trim(), recordarme);
 
     setIsLoading(false);
 
@@ -76,11 +79,16 @@ export default function LoginScreen() {
             {/* Campo Usuario */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Usuario</Text>
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedField === 'usuario' && styles.inputContainerFocused,
+                ]}
+              >
                 <Ionicons
                   name="person-outline"
                   size={20}
-                  color="#94A3B8"
+                  color={focusedField === 'usuario' ? '#0F172A' : '#94A3B8'}
                   style={styles.inputLeftIcon}
                 />
                 <TextInput
@@ -90,6 +98,19 @@ export default function LoginScreen() {
                   value={usuario}
                   onChangeText={setUsuario}
                   autoCapitalize="none"
+                  returnKeyType="next"
+                  onFocus={() => setFocusedField('usuario')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={() => passwordInputRef.current?.focus()}
+                  onKeyPress={(e) => {
+                    if (e.nativeEvent?.key === 'Enter') {
+                      if (password.trim()) {
+                        handleLogin();
+                      } else {
+                        passwordInputRef.current?.focus();
+                      }
+                    }
+                  }}
                 />
               </View>
             </View>
@@ -97,20 +118,35 @@ export default function LoginScreen() {
             {/* Campo Contraseña */}
             <View style={styles.fieldGroup}>
               <Text style={styles.label}>Contraseña</Text>
-              <View style={styles.inputContainer}>
+              <View
+                style={[
+                  styles.inputContainer,
+                  focusedField === 'password' && styles.inputContainerFocused,
+                ]}
+              >
                 <Ionicons
                   name="lock-closed-outline"
                   size={20}
-                  color="#94A3B8"
+                  color={focusedField === 'password' ? '#0F172A' : '#94A3B8'}
                   style={styles.inputLeftIcon}
                 />
                 <TextInput
+                  ref={passwordInputRef}
                   style={styles.input}
                   placeholder="••••••••"
                   placeholderTextColor="#94A3B8"
                   secureTextEntry={obscurePassword}
                   value={password}
                   onChangeText={setPassword}
+                  returnKeyType="go"
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  onSubmitEditing={handleLogin}
+                  onKeyPress={(e) => {
+                    if (e.nativeEvent?.key === 'Enter') {
+                      handleLogin();
+                    }
+                  }}
                 />
                 <TouchableOpacity
                   onPress={() => setObscurePassword(!obscurePassword)}
@@ -120,11 +156,23 @@ export default function LoginScreen() {
                   <Ionicons
                     name={obscurePassword ? 'eye-outline' : 'eye-off-outline'}
                     size={20}
-                    color="#94A3B8"
+                    color={focusedField === 'password' ? '#0F172A' : '#94A3B8'}
                   />
                 </TouchableOpacity>
               </View>
             </View>
+
+            {/* Casilla Recordarme */}
+            <TouchableOpacity
+              style={styles.rememberRow}
+              onPress={() => setRecordarme(!recordarme)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, recordarme && styles.checkboxActive]}>
+                {recordarme && <Ionicons name="checkmark" size={15} color="#FFFFFF" />}
+              </View>
+              <Text style={styles.rememberLabel}>Recordarme</Text>
+            </TouchableOpacity>
 
             {/* Botón de Ingresar al Sistema */}
             <TouchableOpacity
@@ -250,11 +298,27 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F8FAFC',
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: '#E2E8F0',
     borderRadius: 14,
     paddingHorizontal: 14,
     height: 52,
+  },
+  inputContainerFocused: {
+    borderColor: '#0F172A',
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 0 0 3px rgba(15, 23, 42, 0.08)',
+      },
+      default: {
+        shadowColor: '#0F172A',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.06,
+        shadowRadius: 4,
+        elevation: 2,
+      },
+    }),
   },
   inputLeftIcon: {
     marginRight: 10,
@@ -264,9 +328,44 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#0F172A',
     height: '100%',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none',
+        outlineWidth: 0,
+      },
+    }),
   },
   eyeToggle: {
     padding: 6,
+  },
+
+  /* Recordarme */
+  rememberRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+    marginTop: 2,
+    paddingVertical: 4,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: '#94A3B8',
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  checkboxActive: {
+    backgroundColor: '#0F172A',
+    borderColor: '#0F172A',
+  },
+  rememberLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#334155',
   },
 
   /* Button */

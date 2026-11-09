@@ -23,13 +23,14 @@ CREATE TABLE IF NOT EXISTS cuentas (
 CREATE TABLE IF NOT EXISTS alimentos (
     id INT PRIMARY KEY AUTO_INCREMENT,
     nombre VARCHAR(200) NOT NULL,
-    tipo VARCHAR(15) NOT NULL,                 -- Comida, Desayuno, Antojito, Bebida, Torta, Postre, Entrada, Guarnicion, Extra, Otros
+    tipo VARCHAR(25) NOT NULL,                 -- Comida, Desayuno, Antojito, Bebida, Torta, Molletes, Postre, Entrada, Guarnicion, Extra, Otros
     precio DECIMAL(10,2) NOT NULL,
     precio_paquete DECIMAL(10,2) NULL DEFAULT NULL,
     precio_antojito DECIMAL(10,2) NULL DEFAULT NULL,
     aplica_paquete TINYINT(1) NOT NULL DEFAULT 1,
     aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1,
     zona ENUM('barra', 'cocina', 'comal') NOT NULL DEFAULT 'cocina', -- Zonas de preparación
+    categorias_extra VARCHAR(255) NULL DEFAULT NULL,                 -- Categorías a las que aplica si es tipo Extra
     estado BOOLEAN NOT NULL DEFAULT TRUE
 );
 

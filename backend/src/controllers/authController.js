@@ -4,7 +4,7 @@ const jwt = require('jsonwebtoken');
 
 // POST /api/auth/login
 const login = async (req, res) => {
-  const { nombre, contrasena } = req.body;
+  const { nombre, contrasena, recordarme } = req.body;
 
   if (!nombre || !contrasena) {
     return res.status(400).json({ error: 'Por favor proporcione usuario y contraseña' });
@@ -42,11 +42,19 @@ const login = async (req, res) => {
     }
 
     // Generar JWT Token
-    const token = jwt.sign(
-      { id: usuario.id, nombre: usuario.nombre, tipo: usuario.tipo },
-      process.env.JWT_SECRET || 'lacocina_pos_secret_key_2026',
-      { expiresIn: '24h' }
-    );
+    // Si recordarme está marcado, el token se emite por tiempo indefinido (sin exp).
+    // Si no está marcado, expira en 24h.
+    const esIndefinido = recordarme === true || recordarme === 'true';
+    const token = esIndefinido
+      ? jwt.sign(
+          { id: usuario.id, nombre: usuario.nombre, tipo: usuario.tipo },
+          process.env.JWT_SECRET || 'lacocina_pos_secret_key_2026'
+        )
+      : jwt.sign(
+          { id: usuario.id, nombre: usuario.nombre, tipo: usuario.tipo },
+          process.env.JWT_SECRET || 'lacocina_pos_secret_key_2026',
+          { expiresIn: '24h' }
+        );
 
     return res.json({
       mensaje: 'Inicio de sesión exitoso',

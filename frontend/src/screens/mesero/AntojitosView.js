@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MeseroContext } from '../../context/MeseroContext';
 import { API_URL } from '../../config/api';
+import { extraAplicaACategoria } from '../../utils/extrasHelper';
 
 export default function AntojitosView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
@@ -74,7 +75,9 @@ export default function AntojitosView({ onVolverMenu }) {
         const bdGuisos = data.alimentos.filter(
           (a) => (a.tipo === 'Comida' || a.tipo === 'Platos Fuertes') && (a.aplica_paquete_antojito === undefined || a.aplica_paquete_antojito === null || Number(a.aplica_paquete_antojito) === 1)
         );
-        const bdExtras = data.alimentos.filter((a) => a.tipo === 'Extra');
+        const bdExtras = data.alimentos.filter(
+          (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Antojitos')
+        );
 
         if (bdAntojitos.length > 0) setCatAntojitos(bdAntojitos);
         if (bdGuisos.length > 0) setCatGuisos(bdGuisos);

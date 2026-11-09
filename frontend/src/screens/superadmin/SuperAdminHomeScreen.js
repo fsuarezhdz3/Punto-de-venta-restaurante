@@ -25,6 +25,7 @@ import { API_URL } from '../../config/api';
 import ModalTicketPreview from '../../components/ModalTicketPreview';
 import ModalGeneradorMenu from '../../components/ModalGeneradorMenu';
 import ModalCalendarioRango from '../../components/ModalCalendarioRango';
+import { CATEGORIAS_CON_EXTRAS } from '../../utils/extrasHelper';
 
 // Helper para limpiar sufijos de zonas (-cocina, -comal, -bar)
 const limpiarZona = (str = '') => {
@@ -206,6 +207,7 @@ export default function SuperAdminHomeScreen() {
   const [formEstado, setFormEstado] = useState(true);
   const [formAplicaPaquete, setFormAplicaPaquete] = useState(true);
   const [formAplicaPaqueteAntojito, setFormAplicaPaqueteAntojito] = useState(true);
+  const [formCategoriasExtra, setFormCategoriasExtra] = useState([]);
   const [formError, setFormError] = useState('');
 
   // Modal Edición Masiva de Precios (Editar Varios)
@@ -659,6 +661,7 @@ export default function SuperAdminHomeScreen() {
     setFormEstado(true);
     setFormAplicaPaquete(true);
     setFormAplicaPaqueteAntojito(true);
+    setFormCategoriasExtra([]);
     setFormError('');
     setAlimentoModalVisible(true);
   };
@@ -674,6 +677,12 @@ export default function SuperAdminHomeScreen() {
     setFormEstado(Number(item.estado) === 1);
     setFormAplicaPaquete(item.aplica_paquete !== undefined && item.aplica_paquete !== null ? Number(item.aplica_paquete) === 1 : true);
     setFormAplicaPaqueteAntojito(item.aplica_paquete_antojito !== undefined && item.aplica_paquete_antojito !== null ? Number(item.aplica_paquete_antojito) === 1 : true);
+    if (item.categorias_extra) {
+      const cats = item.categorias_extra.split(',').map((s) => s.trim()).filter(Boolean);
+      setFormCategoriasExtra(cats);
+    } else {
+      setFormCategoriasExtra([]);
+    }
     setFormError('');
     setAlimentoModalVisible(true);
   };
@@ -688,6 +697,16 @@ export default function SuperAdminHomeScreen() {
       setFormError(true);
       return;
     }
+
+    const esTipoExtra = (formTipo || '').toLowerCase().includes('extra');
+    if (esTipoExtra && formCategoriasExtra.length === 0) {
+      Alert.alert(
+        'Categorías Requeridas',
+        'Debes seleccionar al menos una categoría de alimento a la que aplique este extra.'
+      );
+      return;
+    }
+
     setFormError(false);
 
     const payload = {
@@ -700,6 +719,7 @@ export default function SuperAdminHomeScreen() {
       estado: formEstado ? 1 : 0,
       aplica_paquete: formAplicaPaquete ? 1 : 0,
       aplica_paquete_antojito: formAplicaPaqueteAntojito ? 1 : 0,
+      categorias_extra: esTipoExtra ? formCategoriasExtra.join(', ') : null,
     };
 
     try {
@@ -1524,6 +1544,7 @@ export default function SuperAdminHomeScreen() {
       if ((catFilterLower === 'guarniciones' || catFilterLower === 'guarnicion') && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
       if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
       if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+      if (catFilterLower === 'molletes' && (aTipoLower === 'mollete' || aTipoLower === 'molletes')) return true;
       if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
       if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
       if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
@@ -1878,7 +1899,7 @@ export default function SuperAdminHomeScreen() {
           <View>
             <View style={styles.catalogoHeaderRow}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catFiltrosScroll}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Molletes', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catFiltroChip, catFiltroMenu === cat && styles.catFiltroChipActive]}
@@ -1958,6 +1979,11 @@ export default function SuperAdminHomeScreen() {
                           {item.precio_paquete !== null && item.precio_paquete !== undefined ? ` • Paquete: $${item.precio_paquete}` : ''}
                           {item.precio_antojito !== null && item.precio_antojito !== undefined ? ` • Antojito: $${item.precio_antojito}` : ''}
                         </Text>
+                        {(item.tipo === 'Extra' || item.tipo === 'Extras') && (
+                          <Text style={{ fontSize: 11, color: '#0D9488', fontWeight: '700', marginTop: 3 }}>
+                            🏷️ Aplica a: {item.categorias_extra || 'Todas'}
+                          </Text>
+                        )}
                       </View>
 
                       <View style={styles.alimentoCardActionsCol}>
@@ -2737,7 +2763,7 @@ export default function SuperAdminHomeScreen() {
 
               <Text style={styles.inputLabel}>Categoría:</Text>
               <View style={styles.tipoRolesGrid}>
-                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Extra', 'Otros'].map((cat) => (
+                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Molletes', 'Extra', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.rolOptionChip, formTipo === cat && styles.rolOptionChipActive]}
@@ -2747,6 +2773,71 @@ export default function SuperAdminHomeScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
+
+              {((formTipo || '').toLowerCase().includes('extra')) && (
+                <View style={{ marginTop: 10, marginBottom: 14, padding: 12, backgroundColor: '#F0FDFA', borderRadius: 12, borderWidth: 1, borderColor: '#99F6E4' }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    <Text style={[styles.inputLabel, { marginBottom: 0, color: '#0F766E', fontWeight: '800' }]}>
+                      ✨ ¿A qué comida aplica este extra? *
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        if (formCategoriasExtra.length === CATEGORIAS_CON_EXTRAS.length) {
+                          setFormCategoriasExtra([]);
+                        } else {
+                          setFormCategoriasExtra([...CATEGORIAS_CON_EXTRAS]);
+                        }
+                      }}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={{ fontSize: 12, color: '#0D9488', fontWeight: '800' }}>
+                        {formCategoriasExtra.length === CATEGORIAS_CON_EXTRAS.length ? 'Desmarcar todos' : 'Marcar todos'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#0F766E', marginBottom: 10 }}>
+                    Marca las categorías donde se podrá agregar este extra (no aplica a bebidas ni litros):
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                    {CATEGORIAS_CON_EXTRAS.map((cat) => {
+                      const isChecked = formCategoriasExtra.includes(cat);
+                      return (
+                        <TouchableOpacity
+                          key={cat}
+                          style={{
+                            flexDirection: 'row',
+                            alignItems: 'center',
+                            paddingVertical: 7,
+                            paddingHorizontal: 12,
+                            borderRadius: 8,
+                            borderWidth: 1.5,
+                            borderColor: isChecked ? '#0D9488' : '#CBD5E1',
+                            backgroundColor: isChecked ? '#CCFBF1' : '#FFFFFF',
+                          }}
+                          onPress={() => {
+                            if (isChecked) {
+                              setFormCategoriasExtra(formCategoriasExtra.filter((c) => c !== cat));
+                            } else {
+                              setFormCategoriasExtra([...formCategoriasExtra, cat]);
+                            }
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Ionicons
+                            name={isChecked ? 'checkbox' : 'square-outline'}
+                            size={18}
+                            color={isChecked ? '#0D9488' : '#64748B'}
+                            style={{ marginRight: 6 }}
+                          />
+                          <Text style={{ fontSize: 13, fontWeight: isChecked ? '800' : '600', color: isChecked ? '#0F766E' : '#334155' }}>
+                            {cat}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              )}
 
               <Text style={styles.inputLabel}>Zona de Preparación:</Text>
               <View style={styles.tipoRolesGrid}>
@@ -2824,7 +2915,7 @@ export default function SuperAdminHomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               <Text style={styles.inputLabel}>1. Selecciona la Categoría:</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Extras', 'Otros'].map((cat) => (
+                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Molletes', 'Extras', 'Otros'].map((cat) => (
                   <TouchableOpacity
                     key={cat}
                     style={[styles.catFiltroChip, catFiltroMasivo === cat && styles.catFiltroChipActive]}
@@ -2837,6 +2928,7 @@ export default function SuperAdminHomeScreen() {
                         if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
                         if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
                         if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+                        if (catFilterLower === 'molletes' && (aTipoLower === 'mollete' || aTipoLower === 'molletes')) return true;
                         if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
                         if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
                         if ((catFilterLower === 'otros' || catFilterLower === 'otro') && (aTipoLower === 'otro' || aTipoLower === 'otros')) return true;
@@ -2863,6 +2955,7 @@ export default function SuperAdminHomeScreen() {
                   if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
                   if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
                   if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
+                  if (catFilterLower === 'molletes' && (aTipoLower === 'mollete' || aTipoLower === 'molletes')) return true;
                   if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
                   if (catFilterLower === 'litros' && (aTipoLower === 'litros' || aTipoLower === 'litro')) return true;
                   return aTipoLower === catFilterLower;

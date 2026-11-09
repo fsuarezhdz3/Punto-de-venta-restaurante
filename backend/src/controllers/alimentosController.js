@@ -57,7 +57,7 @@ const getAllAlimentosAdmin = async (req, res) => {
 // POST /api/alimentos
 // Crear un nuevo alimento
 const crearAlimento = async (req, res) => {
-  const { nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito } = req.body;
+  const { nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito, categorias_extra } = req.body;
 
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'Falta ingresar el nombre del alimento.' });
@@ -85,16 +85,22 @@ const crearAlimento = async (req, res) => {
   const aplicaPaqueteAntojitoVal = (aplica_paquete_antojito !== undefined && aplica_paquete_antojito !== null)
     ? (aplica_paquete_antojito ? 1 : 0)
     : 1;
+  const categoriasExtraVal = Array.isArray(categorias_extra)
+    ? categorias_extra.join(', ')
+    : (categorias_extra !== undefined && categorias_extra !== null && String(categorias_extra).trim() !== ''
+        ? String(categorias_extra).trim()
+        : null);
 
   try {
     try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_paquete DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_antojito DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos ADD COLUMN categorias_extra VARCHAR(255) NULL DEFAULT NULL'); } catch (e) {}
 
     const [result] = await db.query(
-      'INSERT INTO alimentos (nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal]
+      'INSERT INTO alimentos (nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito, categorias_extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal]
     );
 
     return res.json({
@@ -110,6 +116,7 @@ const crearAlimento = async (req, res) => {
         estado: estadoValido,
         aplica_paquete: aplicaPaqueteVal,
         aplica_paquete_antojito: aplicaPaqueteAntojitoVal,
+        categorias_extra: categoriasExtraVal,
       },
     });
   } catch (error) {
@@ -122,7 +129,7 @@ const crearAlimento = async (req, res) => {
 // Editar un alimento existente
 const actualizarAlimento = async (req, res) => {
   const { id } = req.params;
-  const { nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito } = req.body;
+  const { nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito, categorias_extra } = req.body;
 
   if (!nombre || !nombre.trim()) {
     return res.status(400).json({ error: 'Falta ingresar el nombre del alimento.' });
@@ -150,16 +157,22 @@ const actualizarAlimento = async (req, res) => {
   const aplicaPaqueteAntojitoVal = (aplica_paquete_antojito !== undefined && aplica_paquete_antojito !== null)
     ? (aplica_paquete_antojito ? 1 : 0)
     : 1;
+  const categoriasExtraVal = Array.isArray(categorias_extra)
+    ? categorias_extra.join(', ')
+    : (categorias_extra !== undefined && categorias_extra !== null && String(categorias_extra).trim() !== ''
+        ? String(categorias_extra).trim()
+        : null);
 
   try {
     try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_paquete DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_antojito DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos ADD COLUMN categorias_extra VARCHAR(255) NULL DEFAULT NULL'); } catch (e) {}
 
     await db.query(
-      'UPDATE alimentos SET nombre = ?, tipo = ?, precio = ?, precio_paquete = ?, precio_antojito = ?, zona = ?, estado = ?, aplica_paquete = ?, aplica_paquete_antojito = ? WHERE id = ?',
-      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, id]
+      'UPDATE alimentos SET nombre = ?, tipo = ?, precio = ?, precio_paquete = ?, precio_antojito = ?, zona = ?, estado = ?, aplica_paquete = ?, aplica_paquete_antojito = ?, categorias_extra = ? WHERE id = ?',
+      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal, id]
     );
 
     return res.json({
@@ -176,6 +189,7 @@ const actualizarAlimento = async (req, res) => {
         estado: estadoValido,
         aplica_paquete: aplicaPaqueteVal,
         aplica_paquete_antojito: aplicaPaqueteAntojitoVal,
+        categorias_extra: categoriasExtraVal,
       },
     });
   } catch (error) {

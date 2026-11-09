@@ -16,6 +16,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { MeseroContext } from '../../context/MeseroContext';
 import { API_URL } from '../../config/api';
+import { extraAplicaACategoria } from '../../utils/extrasHelper';
 
 export default function TortasView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
@@ -63,7 +64,9 @@ export default function TortasView({ onVolverMenu }) {
 
       if (res.ok && data.alimentos) {
         const bdTortas = data.alimentos.filter((a) => a.tipo === 'Tortas' || a.tipo === 'Torta');
-        const bdExtras = data.alimentos.filter((a) => a.tipo === 'Extra');
+        const bdExtras = data.alimentos.filter(
+          (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Tortas')
+        );
 
         if (bdTortas.length > 0) setCatTortas(bdTortas);
         if (bdExtras.length > 0) setCatExtras(bdExtras);

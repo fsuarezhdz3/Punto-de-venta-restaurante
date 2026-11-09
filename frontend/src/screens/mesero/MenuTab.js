@@ -17,6 +17,7 @@ import ComidaView from './ComidaView';
 import BebidasView from './BebidasView';
 import AntojitosView from './AntojitosView';
 import TortasView from './TortasView';
+import MolletesView from './MolletesView';
 import PostresView from './PostresView';
 import ExtrasView from './ExtrasView';
 import LitrosView from './LitrosView';
@@ -40,6 +41,7 @@ export default function MenuTab() {
     { id: 'bebidas', nombre: 'BEBIDAS', image: require('../../../assets/Bebidas.webp'), icon: 'wine-outline', color: '#0284C7', bg: '#E0F2FE' },
     { id: 'antojitos', nombre: 'ANTOJITOS', image: require('../../../assets/antojitos.webp'), icon: 'fast-food-outline', color: '#DC2626', bg: '#FEE2E2' },
     { id: 'tortas', nombre: 'TORTAS', image: require('../../../assets/tortas.webp'), icon: 'nutrition-outline', color: '#B45309', bg: '#FEF3C7' },
+    { id: 'molletes', nombre: 'MOLLETES', image: require('../../../assets/molletes.png'), icon: 'restaurant-outline', color: '#D97706', bg: '#FEF3C7' },
     { id: 'postres', nombre: 'POSTRES', image: require('../../../assets/Postres.webp'), icon: 'ice-cream-outline', color: '#EC4899', bg: '#FCE7F3' },
     { id: 'extras', nombre: 'EXTRAS', image: require('../../../assets/extras.webp'), icon: 'add-circle-outline', color: '#475569', bg: '#F1F5F9' },
     { id: 'litros', nombre: 'LITROS', image: require('../../../assets/litros.webp'), icon: 'beaker-outline', color: '#0D9488', bg: '#CCFBF1' },
@@ -87,6 +89,11 @@ export default function MenuTab() {
   // Si está dentro de la vista de Tortas
   if (activeCategoryView === 'tortas') {
     return <TortasView onVolverMenu={() => setActiveCategoryView(null)} />;
+  }
+
+  // Si está dentro de la vista de Molletes
+  if (activeCategoryView === 'molletes') {
+    return <MolletesView onVolverMenu={() => setActiveCategoryView(null)} />;
   }
 
   // Si está dentro de la vista de Postres

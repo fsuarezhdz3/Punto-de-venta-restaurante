@@ -125,6 +125,13 @@ export default function OrdenesTab() {
     'Torta de Chorizo con Huevo',
   ]);
 
+  const [catMolletes, setCatMolletes] = useState([
+    'Molletes Sencillos (Frijol y Queso)',
+    'Molletes con Chorizo',
+    'Molletes con Jamón',
+    'Molletes con Tocino',
+  ]);
+
   const [catEntradas, setCatEntradas] = useState([
     'Sopa de Fideo Casera',
     'Crema de Elote Dulce',
@@ -188,7 +195,8 @@ export default function OrdenesTab() {
         const des = data.alimentos.filter((a) => a.tipo === 'Desayuno').map((a) => a.nombre);
         const pla = data.alimentos.filter((a) => a.tipo === 'Comida' || a.tipo === 'Platos Fuertes').map((a) => a.nombre);
         const ant = data.alimentos.filter((a) => a.tipo === 'Antojito').map((a) => a.nombre);
-        const tor = data.alimentos.filter((a) => a.tipo === 'Torta').map((a) => a.nombre);
+        const tor = data.alimentos.filter((a) => a.tipo === 'Torta' || a.tipo === 'Tortas').map((a) => a.nombre);
+        const mol = data.alimentos.filter((a) => a.tipo === 'Mollete' || a.tipo === 'Molletes').map((a) => a.nombre);
         const ent = data.alimentos.filter((a) => a.tipo === 'Entrada').map((a) => a.nombre);
         const gua = data.alimentos.filter((a) => a.tipo === 'Guarnicion').map((a) => a.nombre);
         const beb = data.alimentos.filter((a) => a.tipo === 'Bebida').map((a) => a.nombre);
@@ -199,6 +207,7 @@ export default function OrdenesTab() {
         if (pla.length > 0) setCatPlatosFuertes(pla);
         if (ant.length > 0) setCatAntojitos(ant);
         if (tor.length > 0) setCatTortas(tor);
+        if (mol.length > 0) setCatMolletes(mol);
         if (ent.length > 0) setCatEntradas(ent);
         if (gua.length > 0) setCatGuarniciones(gua);
         if (beb.length > 0) setCatBebidas(beb);
@@ -430,6 +439,10 @@ export default function OrdenesTab() {
 
     if (alimentoNombre.includes('torta')) {
       return 'tortas';
+    }
+
+    if (alimentoNombre.includes('mollete')) {
+      return 'molletes';
     }
 
     if (
@@ -765,6 +778,8 @@ export default function OrdenesTab() {
     let catPrincipal = 'platos_fuertes';
     if (catItem.includes('torta') || alimentoTxt.includes('torta')) {
       catPrincipal = 'tortas';
+    } else if (catItem.includes('mollete') || alimentoTxt.includes('mollete')) {
+      catPrincipal = 'molletes';
     } else if (
       catItem.includes('antojito') ||
       alimentoTxt.includes('antojito') ||
@@ -1033,6 +1048,16 @@ export default function OrdenesTab() {
           >
             <Text style={[styles.filterPillText, filtroCategoria === 'tortas' && styles.filterPillTextActive]}>
               Tortas
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.filterPill, filtroCategoria === 'molletes' && styles.filterPillActive]}
+            onPress={() => setFiltroCategoria('molletes')}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.filterPillText, filtroCategoria === 'molletes' && styles.filterPillTextActive]}>
+              Molletes
             </Text>
           </TouchableOpacity>
 
@@ -1512,6 +1537,23 @@ export default function OrdenesTab() {
                     <Ionicons name="wine-outline" size={18} color="#0284C7" style={{ marginRight: 8 }} />
                     <Text style={styles.pickerSelectorBtnText}>
                       {editForm.bebida ? editForm.bebida : 'Sin bebida'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+                </>
+              )}
+
+              {categoriaEditForm === 'molletes' && (
+                <>
+                  <Text style={styles.inputLabel}>Mollete Principal</Text>
+                  <TouchableOpacity
+                    style={styles.pickerSelectorBtn}
+                    onPress={() => abrirPicker('alimento', 'Seleccionar Mollete', catMolletes)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="restaurant-outline" size={18} color="#D97706" style={{ marginRight: 8 }} />
+                    <Text style={styles.pickerSelectorBtnText}>
+                      {editForm.alimento || 'Seleccionar Mollete...'}
                     </Text>
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
