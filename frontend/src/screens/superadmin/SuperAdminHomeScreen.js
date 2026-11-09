@@ -208,7 +208,7 @@ export default function SuperAdminHomeScreen() {
   const [formAplicaPaquete, setFormAplicaPaquete] = useState(true);
   const [formAplicaPaqueteAntojito, setFormAplicaPaqueteAntojito] = useState(true);
   const [formCategoriasExtra, setFormCategoriasExtra] = useState([]);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useState(false);
 
   // Modal Edición Masiva de Precios (Editar Varios)
   const [modalMasivoVisible, setModalMasivoVisible] = useState(false);
@@ -662,7 +662,7 @@ export default function SuperAdminHomeScreen() {
     setFormAplicaPaquete(true);
     setFormAplicaPaqueteAntojito(true);
     setFormCategoriasExtra([]);
-    setFormError('');
+    setFormError(false);
     setAlimentoModalVisible(true);
   };
 
@@ -683,7 +683,7 @@ export default function SuperAdminHomeScreen() {
     } else {
       setFormCategoriasExtra([]);
     }
-    setFormError('');
+    setFormError(false);
     setAlimentoModalVisible(true);
   };
 
@@ -2710,24 +2710,24 @@ export default function SuperAdminHomeScreen() {
               <TextInput
                 style={[
                   styles.inputField,
-                  formError && !formNombre.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                  Boolean(formError && !formNombre.trim()) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
                 ]}
                 placeholder="Ej. Tacos de Asada"
                 placeholderTextColor="#94A3B8"
                 value={formNombre}
                 onChangeText={(val) => { setFormNombre(val); if (formError) setFormError(false); }}
               />
-              {formError && !formNombre.trim() && (
+              {Boolean(formError && !formNombre.trim()) ? (
                 <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
                   * El nombre del alimento es obligatorio
                 </Text>
-              )}
+              ) : null}
 
               <Text style={styles.inputLabel}>Precio ($): *</Text>
               <TextInput
                 style={[
                   styles.inputField,
-                  formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                  Boolean(formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0)) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
                 ]}
                 placeholder="0.00"
                 placeholderTextColor="#94A3B8"
@@ -2735,11 +2735,11 @@ export default function SuperAdminHomeScreen() {
                 value={formPrecio}
                 onChangeText={(val) => { setFormPrecio(val); if (formError) setFormError(false); }}
               />
-              {formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && (
+              {Boolean(formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0)) ? (
                 <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
                   * El precio es obligatorio (número válido ≥ 0)
                 </Text>
-              )}
+              ) : null}
 
               <Text style={styles.inputLabel}>Precio en Paquete ($) (Opcional, dejar en blanco si no aplica):</Text>
               <TextInput
@@ -2774,7 +2774,7 @@ export default function SuperAdminHomeScreen() {
                 ))}
               </View>
 
-              {((formTipo || '').toLowerCase().includes('extra')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('extra')) ? (
                 <View style={{ marginTop: 10, marginBottom: 14, padding: 12, backgroundColor: '#F0FDFA', borderRadius: 12, borderWidth: 1, borderColor: '#99F6E4' }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <Text style={[styles.inputLabel, { marginBottom: 0, color: '#0F766E', fontWeight: '800' }]}>
@@ -2837,7 +2837,7 @@ export default function SuperAdminHomeScreen() {
                     })}
                   </View>
                 </View>
-              )}
+              ) : null}
 
               <Text style={styles.inputLabel}>Zona de Preparación:</Text>
               <View style={styles.tipoRolesGrid}>
@@ -2852,7 +2852,7 @@ export default function SuperAdminHomeScreen() {
                 ))}
               </View>
 
-              {((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#F0FDFA', borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }}>
                   <View style={{ flex: 1, paddingRight: 10 }}>
                     <Text style={{ fontSize: 13, color: '#0F766E', fontWeight: '700' }}>
@@ -2869,9 +2869,9 @@ export default function SuperAdminHomeScreen() {
                     thumbColor={formAplicaPaquete ? '#0D9488' : '#64748B'}
                   />
                 </View>
-              )}
+              ) : null}
 
-              {((formTipo || '').toLowerCase().includes('comida')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('comida')) ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 12, padding: 10, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }}>
                   <View style={{ flex: 1, paddingRight: 10 }}>
                     <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '700' }}>
@@ -2888,7 +2888,7 @@ export default function SuperAdminHomeScreen() {
                     thumbColor={formAplicaPaqueteAntojito ? '#D97706' : '#64748B'}
                   />
                 </View>
-              )}
+              ) : null}
 
               <TouchableOpacity style={styles.btnSubmitModal} onPress={handleGuardarAlimento} activeOpacity={0.85}>
                 <Text style={styles.btnSubmitModalText}>{alimentoEditando ? 'Guardar Cambios' : 'Crear Alimento'}</Text>

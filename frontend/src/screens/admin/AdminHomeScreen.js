@@ -173,7 +173,7 @@ export default function AdminHomeScreen() {
   const [formAplicaPaquete, setFormAplicaPaquete] = useState(true);
   const [formAplicaPaqueteAntojito, setFormAplicaPaqueteAntojito] = useState(true);
   const [formCategoriasExtra, setFormCategoriasExtra] = useState([]);
-  const [formError, setFormError] = useState('');
+  const [formError, setFormError] = useState(false);
 
   // Modal Edición Masiva de Precios
   const [modalMasivoVisible, setModalMasivoVisible] = useState(false);
@@ -793,7 +793,7 @@ export default function AdminHomeScreen() {
     setFormAplicaPaquete(true);
     setFormAplicaPaqueteAntojito(true);
     setFormCategoriasExtra([]);
-    setFormError('');
+    setFormError(false);
     setAlimentoModalVisible(true);
   };
 
@@ -814,7 +814,7 @@ export default function AdminHomeScreen() {
     } else {
       setFormCategoriasExtra([]);
     }
-    setFormError('');
+    setFormError(false);
     setAlimentoModalVisible(true);
   };
 
@@ -3062,24 +3062,24 @@ export default function AdminHomeScreen() {
               <TextInput
                 style={[
                   styles.inputPagaField,
-                  formError && !formNombre.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                  Boolean(formError && !formNombre.trim()) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
                 ]}
                 placeholder="Ej. Milanesa de Res"
                 placeholderTextColor="#94A3B8"
                 value={formNombre}
                 onChangeText={(val) => { setFormNombre(val); if (formError) setFormError(false); }}
               />
-              {formError && !formNombre.trim() && (
+              {Boolean(formError && !formNombre.trim()) ? (
                 <Text style={{ color: '#EF4444', fontSize: 12, marginTop: -6, marginBottom: 10, fontWeight: '600' }}>
                   * El nombre del alimento es obligatorio
                 </Text>
-              )}
+              ) : null}
 
               <Text style={styles.inputPagaLabel}>Precio ($): *</Text>
               <TextInput
                 style={[
                   styles.inputPagaField,
-                  formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                  Boolean(formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0)) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
                 ]}
                 keyboardType="numeric"
                 placeholder="0"
@@ -3087,11 +3087,11 @@ export default function AdminHomeScreen() {
                 value={formPrecio}
                 onChangeText={(val) => { setFormPrecio(val); if (formError) setFormError(false); }}
               />
-              {formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0) && (
+              {Boolean(formError && (!formPrecio.trim() || isNaN(Number(formPrecio)) || Number(formPrecio) < 0)) ? (
                 <Text style={{ color: '#EF4444', fontSize: 12, marginTop: -6, marginBottom: 10, fontWeight: '600' }}>
                   * El precio es obligatorio (número válido ≥ 0)
                 </Text>
-              )}
+              ) : null}
 
               <Text style={styles.inputPagaLabel}>Precio en Paquete ($) (Opcional dejar en blanco si no aplica):</Text>
               <TextInput
@@ -3128,7 +3128,7 @@ export default function AdminHomeScreen() {
                 ))}
               </View>
 
-              {((formTipo || '').toLowerCase().includes('extra')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('extra')) ? (
                 <View style={{ marginTop: 10, marginBottom: 14, padding: 12, backgroundColor: '#F0FDFA', borderRadius: 12, borderWidth: 1, borderColor: '#99F6E4' }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                     <Text style={[styles.inputPagaLabel, { marginBottom: 0, color: '#0F766E', fontWeight: '800' }]}>
@@ -3191,7 +3191,7 @@ export default function AdminHomeScreen() {
                     })}
                   </View>
                 </View>
-              )}
+              ) : null}
 
               <Text style={styles.inputPagaLabel}>Zona de Preparación:</Text>
               <View style={styles.opcionesFormRow}>
@@ -3222,7 +3222,7 @@ export default function AdminHomeScreen() {
                 />
               </View>
 
-              {((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) ? (
                 <View style={[styles.switchRow, { marginTop: 10, padding: 10, backgroundColor: '#F0FDFA', borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }]}>
                   <View style={{ flex: 1, paddingRight: 10 }}>
                     <Text style={[styles.switchLabel, { color: '#0F766E', fontWeight: '700' }]}>
@@ -3239,9 +3239,9 @@ export default function AdminHomeScreen() {
                     thumbColor={formAplicaPaquete ? '#0D9488' : '#64748B'}
                   />
                 </View>
-              )}
+              ) : null}
 
-              {((formTipo || '').toLowerCase().includes('comida')) && (
+              {Boolean((formTipo || '').toLowerCase().includes('comida')) ? (
                 <View style={[styles.switchRow, { marginTop: 10, padding: 10, backgroundColor: '#FFFBEB', borderRadius: 8, borderWidth: 1, borderColor: '#FDE68A' }]}>
                   <View style={{ flex: 1, paddingRight: 10 }}>
                     <Text style={[styles.switchLabel, { color: '#B45309', fontWeight: '700' }]}>
@@ -3258,7 +3258,7 @@ export default function AdminHomeScreen() {
                     thumbColor={formAplicaPaqueteAntojito ? '#D97706' : '#64748B'}
                   />
                 </View>
-              )}
+              ) : null}
 
               <TouchableOpacity
                 style={styles.btnGuardarAlimentoModal}
