@@ -50,7 +50,7 @@ export default function LoginScreen() {
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="dark" />
       <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
       >
         <ScrollView
@@ -310,13 +310,6 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         boxShadow: '0 0 0 3px rgba(15, 23, 42, 0.08)',
-      },
-      default: {
-        shadowColor: '#0F172A',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.06,
-        shadowRadius: 4,
-        elevation: 2,
       },
     }),
   },
