@@ -132,7 +132,7 @@ export default function SuperAdminHomeScreen() {
   const [formCuentaNombre, setFormCuentaNombre] = useState('');
   const [formCuentaPassword, setFormCuentaPassword] = useState('');
   const [formCuentaTipo, setFormCuentaTipo] = useState('mesero');
-  const [formCuentaError, setFormCuentaError] = useState('');
+  const [formCuentaError, setFormCuentaError] = useState(false);
 
   // Estado para el Modal de Calendario Interactivo de Rango de Fechas
   const [calendarioModal, setCalendarioModal] = useState({
@@ -520,7 +520,7 @@ export default function SuperAdminHomeScreen() {
     setFormCuentaNombre('');
     setFormCuentaPassword('');
     setFormCuentaTipo('mesero');
-    setFormCuentaError('');
+    setFormCuentaError(false);
     setModalCuentaVisible(true);
   };
 
@@ -529,7 +529,7 @@ export default function SuperAdminHomeScreen() {
     setFormCuentaNombre(cuenta.nombre || '');
     setFormCuentaPassword('');
     setFormCuentaTipo(cuenta.tipo || 'mesero');
-    setFormCuentaError('');
+    setFormCuentaError(false);
     setModalCuentaVisible(true);
   };
 
@@ -2641,24 +2641,24 @@ export default function SuperAdminHomeScreen() {
             <TextInput
               style={[
                 styles.inputField,
-                formCuentaError && !formCuentaNombre.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                Boolean(formCuentaError && !formCuentaNombre.trim()) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
               ]}
               placeholder="Ej. mesero1, admin"
               placeholderTextColor="#94A3B8"
               value={formCuentaNombre}
               onChangeText={(val) => { setFormCuentaNombre(val); if (formCuentaError) setFormCuentaError(false); }}
             />
-            {formCuentaError && !formCuentaNombre.trim() && (
+            {Boolean(formCuentaError && !formCuentaNombre.trim()) ? (
               <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
                 * El nombre de usuario es obligatorio
               </Text>
-            )}
+            ) : null}
 
             <Text style={styles.inputLabel}>Contraseña {cuentaEditando ? '(Opcional se deja intacta si está vacío)' : '*:'}</Text>
             <TextInput
               style={[
                 styles.inputField,
-                formCuentaError && !cuentaEditando && !formCuentaPassword.trim() && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
+                Boolean(formCuentaError && !cuentaEditando && !formCuentaPassword.trim()) && { borderColor: '#EF4444', borderWidth: 2, backgroundColor: '#FEF2F2' }
               ]}
               placeholder="Contraseña del usuario"
               placeholderTextColor="#94A3B8"
@@ -2666,11 +2666,11 @@ export default function SuperAdminHomeScreen() {
               value={formCuentaPassword}
               onChangeText={(val) => { setFormCuentaPassword(val); if (formCuentaError) setFormCuentaError(false); }}
             />
-            {formCuentaError && !cuentaEditando && !formCuentaPassword.trim() && (
+            {Boolean(formCuentaError && !cuentaEditando && !formCuentaPassword.trim()) ? (
               <Text style={{ color: '#EF4444', fontSize: 12, marginTop: 2, marginBottom: 8, fontWeight: '600' }}>
                 * La contraseña es obligatoria para nuevas cuentas
               </Text>
-            )}
+            ) : null}
 
             <Text style={styles.inputLabel}>Tipo de Cuenta / Rol:</Text>
             <View style={styles.tipoRolesGrid}>
