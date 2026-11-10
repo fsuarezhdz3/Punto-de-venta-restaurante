@@ -22,16 +22,7 @@ export default function PlatosFuertesView({ onVolverMenu }) {
   // Lista de platos fuertes disponibles en catálogo a la carta (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catPlatosFuertes, setCatPlatosFuertes] = useState([
-    { id: 6, nombre: 'Milanesa de Res Empanizada A la Carta', tipo: 'Comida', precio: 110 },
-    { id: 7, nombre: 'Pechuga Rellena de Queso y Jamón A la Carta', tipo: 'Comida', precio: 115 },
-    { id: 8, nombre: 'Carne Asada con Ensalada A la Carta', tipo: 'Comida', precio: 120 },
-    { id: 9, nombre: 'Enchiladas Verdes de Pollo A la Carta', tipo: 'Comida', precio: 95 },
-    { id: 10, nombre: 'Flautas Doradas de Pollo (4 pz) A la Carta', tipo: 'Comida', precio: 85 },
-    { id: 46, nombre: 'Mole Poblano con Pollo A la Carta', tipo: 'Comida', precio: 130 },
-    { id: 47, nombre: 'Costillas de Puerco en Salsa Verde A la Carta', tipo: 'Comida', precio: 125 },
-    { id: 48, nombre: 'Birria de Res estilo Jalisco A la Carta', tipo: 'Comida', precio: 135 },
-  ]);
+  const [catPlatosFuertes, setCatPlatosFuertes] = useState([]);
 
   // Preorden / Comanda activa de Platos Fuertes a la carta
   const [preorden, setPreorden] = useState([]);
@@ -51,12 +42,13 @@ export default function PlatosFuertesView({ onVolverMenu }) {
         const bdPlatos = data.alimentos.filter(
           (a) => a.tipo === 'Comida' || a.tipo === 'Platos Fuertes'
         );
-        if (bdPlatos.length > 0) {
-          setCatPlatosFuertes(bdPlatos);
-        }
+        setCatPlatosFuertes(bdPlatos || []);
+      } else {
+        setCatPlatosFuertes([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para platos fuertes:', err.message);
+      console.log('Error al consultar platos fuertes:', err.message);
+      setCatPlatosFuertes([]);
     } finally {
       setLoading(false);
     }

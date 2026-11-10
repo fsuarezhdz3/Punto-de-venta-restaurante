@@ -22,16 +22,7 @@ export default function BebidasView({ onVolverMenu }) {
   // Lista de bebidas disponibles en catálogo (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catBebidas, setCatBebidas] = useState([
-    { id: 11, nombre: 'Jugo de Naranja Natural (500ml)', tipo: 'Bebida', precio: 35 },
-    { id: 12, nombre: 'Café Americano de Olla', tipo: 'Bebida', precio: 25 },
-    { id: 13, nombre: 'Refresco Embotellado (600ml)', tipo: 'Bebida', precio: 28 },
-    { id: 14, nombre: 'Té Helado con Limón', tipo: 'Bebida', precio: 30 },
-    { id: 15, nombre: 'Agua Embotellada Ciel (600ml)', tipo: 'Bebida', precio: 20 },
-    { id: 36, nombre: 'Agua Fresca de Horchata (1 Litro)', tipo: 'Litros', precio: 50 },
-    { id: 37, nombre: 'Agua Fresca de Jamaica (1 Litro)', tipo: 'Litros', precio: 50 },
-    { id: 38, nombre: 'Agua Fresca de Limón con Chía (1 Litro)', tipo: 'Litros', precio: 50 },
-  ]);
+  const [catBebidas, setCatBebidas] = useState([]);
 
   // Preorden / Comanda activa de bebidas para esta mesa
   const [preorden, setPreorden] = useState([]);
@@ -51,12 +42,13 @@ export default function BebidasView({ onVolverMenu }) {
         const bdBebidas = data.alimentos.filter(
           (a) => a.tipo === 'Bebida' || a.tipo === 'Litros'
         );
-        if (bdBebidas.length > 0) {
-          setCatBebidas(bdBebidas);
-        }
+        setCatBebidas(bdBebidas || []);
+      } else {
+        setCatBebidas([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para bebidas:', err.message);
+      console.log('Error al consultar bebidas:', err.message);
+      setCatBebidas([]);
     } finally {
       setLoading(false);
     }

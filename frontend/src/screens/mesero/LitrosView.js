@@ -22,15 +22,7 @@ export default function LitrosView({ onVolverMenu }) {
   // Lista de litros disponibles en catálogo (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catLitros, setCatLitros] = useState([
-    { id: 36, nombre: 'Agua Fresca de Horchata (1 Litro)', tipo: 'Litros', precio: 50 },
-    { id: 37, nombre: 'Agua Fresca de Jamaica (1 Litro)', tipo: 'Litros', precio: 50 },
-    { id: 38, nombre: 'Agua Fresca de Limón con Chía (1 Litro)', tipo: 'Litros', precio: 50 },
-    { id: 59, nombre: 'Caldo de Res Tradicional (1 Litro)', tipo: 'Litros', precio: 110 },
-    { id: 60, nombre: 'Birria de Res con Caldo (1 Litro)', tipo: 'Litros', precio: 140 },
-    { id: 61, nombre: 'Frijoles Charros Especiales (1 Litro)', tipo: 'Litros', precio: 75 },
-    { id: 62, nombre: 'Consomé de Pollo (1 Litro)', tipo: 'Litros', precio: 80 },
-  ]);
+  const [catLitros, setCatLitros] = useState([]);
 
   // Preorden / Comanda activa de litros para esta mesa
   const [preorden, setPreorden] = useState([]);
@@ -50,12 +42,13 @@ export default function LitrosView({ onVolverMenu }) {
         const bdLitros = data.alimentos.filter(
           (a) => a.tipo === 'Litros' || a.tipo === 'Litro'
         );
-        if (bdLitros.length > 0) {
-          setCatLitros(bdLitros);
-        }
+        setCatLitros(bdLitros || []);
+      } else {
+        setCatLitros([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para litros:', err.message);
+      console.log('Error al consultar litros:', err.message);
+      setCatLitros([]);
     } finally {
       setLoading(false);
     }

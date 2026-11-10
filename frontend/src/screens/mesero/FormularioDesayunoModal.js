@@ -17,37 +17,10 @@ export default function FormularioDesayunoModal({ visible, onClose, onGuardar })
   const [loading, setLoading] = useState(false);
 
   // Catálogos obtenidos de la BD
-  const [opcionesDesayuno, setOpcionesDesayuno] = useState([
-    { id: 1, nombre: 'Chilaquiles Verdes con Huevo', precio: 85 },
-    { id: 2, nombre: 'Huevos al Gusto con Jamón o Tocino', precio: 75 },
-    { id: 3, nombre: 'Omelette de Queso y Champiñones', precio: 90 },
-    { id: 4, nombre: 'Huevos Rancheros sobre Tortilla', precio: 80 },
-    { id: 5, nombre: 'Hot Cakes Tradicionales con Mantequilla', precio: 70 },
-  ]);
-
-  const [opcionesGuarnicion, setOpcionesGuarnicion] = useState([
-    'Frijoles Refritos con Queso',
-    'Arroz Rojo Tradicional',
-    'Papas a la Mexicana',
-    'Champiñones Salteados al Ajillo',
-    'Nopales Asados con Orégano',
-  ]);
-
-  const [opcionesBebida, setOpcionesBebida] = useState([
-    'Jugo de Naranja Natural (500ml)',
-    'Café Americano de Olla',
-    'Refresco Embotellado (600ml)',
-    'Té Helado con Limón',
-    'Agua Embotellada Ciel (600ml)',
-  ]);
-
-  const [opcionesExtras, setOpcionesExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [opcionesDesayuno, setOpcionesDesayuno] = useState([]);
+  const [opcionesGuarnicion, setOpcionesGuarnicion] = useState([]);
+  const [opcionesBebida, setOpcionesBebida] = useState([]);
+  const [opcionesExtras, setOpcionesExtras] = useState([]);
 
   // Selección del formulario
   const [desayunoSel, setDesayunoSel] = useState(null);
@@ -80,27 +53,35 @@ export default function FormularioDesayunoModal({ visible, onClose, onGuardar })
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Desayunos')
         );
 
-        if (bdDesayunos.length > 0) {
-          setOpcionesDesayuno(bdDesayunos);
+        setOpcionesDesayuno(bdDesayunos || []);
+        if (bdDesayunos && bdDesayunos.length > 0) {
           setDesayunoSel(bdDesayunos[0]);
+        } else {
+          setDesayunoSel(null);
         }
-        if (bdGuarniciones.length > 0) {
-          const nombresG = bdGuarniciones.map((g) => g.nombre);
-          setOpcionesGuarnicion(nombresG);
-          setGuarnicion1(nombresG[0]);
-          setGuarnicion2(nombresG[1] || nombresG[0]);
-        }
-        if (bdBebidas.length > 0) {
-          const nombresB = bdBebidas.map((b) => b.nombre);
-          setOpcionesBebida(nombresB);
-          setBebidaSel(nombresB[0]);
-        }
-        if (bdExtras.length > 0) {
-          setOpcionesExtras(bdExtras);
-        }
+
+        const nombresG = (bdGuarniciones || []).map((g) => g.nombre);
+        setOpcionesGuarnicion(nombresG);
+        setGuarnicion1(nombresG[0] || '');
+        setGuarnicion2(nombresG[1] || nombresG[0] || '');
+
+        const nombresB = (bdBebidas || []).map((b) => b.nombre);
+        setOpcionesBebida(nombresB);
+        setBebidaSel(nombresB[0] || '');
+
+        setOpcionesExtras(bdExtras || []);
+      } else {
+        setOpcionesDesayuno([]);
+        setOpcionesGuarnicion([]);
+        setOpcionesBebida([]);
+        setOpcionesExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para alimentos:', err.message);
+      console.log('Error al consultar alimentos en FormularioDesayunoModal:', err.message);
+      setOpcionesDesayuno([]);
+      setOpcionesGuarnicion([]);
+      setOpcionesBebida([]);
+      setOpcionesExtras([]);
     } finally {
       setLoading(false);
     }

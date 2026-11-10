@@ -22,15 +22,7 @@ export default function PostresView({ onVolverMenu }) {
   // Lista de postres disponibles en catálogo (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catPostres, setCatPostres] = useState([
-    { id: 16, nombre: 'Flan Napolitano Casero', tipo: 'Postre', precio: 45 },
-    { id: 17, nombre: 'Pastel de Tres Leches con Durazno', tipo: 'Postre', precio: 55 },
-    { id: 18, nombre: 'Pay de Limón helado', tipo: 'Postre', precio: 40 },
-    { id: 19, nombre: 'Arroz con Leche y Canela', tipo: 'Postre', precio: 35 },
-    { id: 20, nombre: 'Helado de Vainilla o Chocolate (2 bolas)', tipo: 'Postre', precio: 30 },
-    { id: 39, nombre: 'Carlota de Limón Tradicional', tipo: 'Postre', precio: 40 },
-    { id: 40, nombre: 'Churros Azucarados con Cajeta (4 pz)', tipo: 'Postre', precio: 45 },
-  ]);
+  const [catPostres, setCatPostres] = useState([]);
 
   // Preorden / Comanda activa de postres para esta mesa
   const [preorden, setPreorden] = useState([]);
@@ -50,12 +42,13 @@ export default function PostresView({ onVolverMenu }) {
         const bdPostres = data.alimentos.filter(
           (a) => a.tipo === 'Postres' || a.tipo === 'Postre'
         );
-        if (bdPostres.length > 0) {
-          setCatPostres(bdPostres);
-        }
+        setCatPostres(bdPostres || []);
+      } else {
+        setCatPostres([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para postres:', err.message);
+      console.log('Error al consultar postres:', err.message);
+      setCatPostres([]);
     } finally {
       setLoading(false);
     }

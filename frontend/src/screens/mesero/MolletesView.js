@@ -28,23 +28,8 @@ export default function MolletesView({ onVolverMenu }) {
 
   // Catálogos desde la BD
   const [loading, setLoading] = useState(false);
-  const [catMolletes, setCatMolletes] = useState([
-    { id: 101, nombre: 'Molletes Sencillos (Frijol y Queso)', precio: 45 },
-    { id: 102, nombre: 'Molletes con Chorizo', precio: 60 },
-    { id: 103, nombre: 'Molletes con Jamón', precio: 55 },
-    { id: 104, nombre: 'Molletes con Tocino', precio: 65 },
-    { id: 105, nombre: 'Molletes con Champiñones', precio: 60 },
-    { id: 106, nombre: 'Molletes Especiales Mi Ama', precio: 75 },
-    { id: 107, nombre: 'Molletes Dulces (Mantequilla y Azúcar)', precio: 40 },
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [catMolletes, setCatMolletes] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -70,11 +55,16 @@ export default function MolletesView({ onVolverMenu }) {
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Molletes')
         );
 
-        if (bdMolletes.length > 0) setCatMolletes(bdMolletes);
-        if (bdExtras.length > 0) setCatExtras(bdExtras);
+        setCatMolletes(bdMolletes || []);
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatMolletes([]);
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para molletes:', err.message);
+      console.log('Error al consultar molletes:', err.message);
+      setCatMolletes([]);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }

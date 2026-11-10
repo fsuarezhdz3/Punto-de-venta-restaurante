@@ -91,93 +91,16 @@ export default function OrdenesTab() {
   const [checkedMap, setCheckedMap] = useState({});
 
   // Catálogos cargados dinámicamente desde el backend por tipo
-  const [catDesayunos, setCatDesayunos] = useState([
-    'Chilaquiles Verdes con Huevo',
-    'Huevos al Gusto con Jamón o Tocino',
-    'Omelette de Queso y Champiñones',
-    'Huevos Rancheros sobre Tortilla',
-    'Hot Cakes Tradicionales con Mantequilla',
-  ]);
-
-  const [catPlatosFuertes, setCatPlatosFuertes] = useState([
-    'Milanesa de Res Empanizada',
-    'Pechuga Rellena de Queso y Jamón',
-    'Carne Asada con Ensalada y Frijoles',
-    'Enchiladas Verdes de Pollo',
-    'Flautas Doradas de Pollo (4 pz)',
-    'Mole Poblano con Pollo y Arroz',
-    'Costillas de Puerco en Salsa Verde',
-    'Birria de Res estilo Jalisco',
-  ]);
-
-  const [catAntojitos, setCatAntojitos] = useState([
-    'Sopes Tradicionales (3 pz)',
-    'Gorditas de Maíz (2 pz)',
-    'Tlacoyos con Nopales (2 pz)',
-    'Quesadillas Fritas (2 pz)',
-    'Pambazo Preparado',
-  ]);
-
-  const [catTortas, setCatTortas] = useState([
-    'Torta de Milanesa con Queso',
-    'Torta Cubana Especial',
-    'Torta de Jamón y Queso',
-    'Torta de Chorizo con Huevo',
-  ]);
-
-  const [catMolletes, setCatMolletes] = useState([
-    'Molletes Sencillos (Frijol y Queso)',
-    'Molletes con Chorizo',
-    'Molletes con Jamón',
-    'Molletes con Tocino',
-  ]);
-
-  const [catEntradas, setCatEntradas] = useState([
-    'Sopa de Fideo Casera',
-    'Crema de Elote Dulce',
-    'Consomé de Pollo con Verduras',
-    'Ensalada Verde de la Casa',
-    'Guacamole Tradicional con Totopos',
-  ]);
-
-  const [catGuarniciones, setCatGuarniciones] = useState([
-    'Frijoles Refritos con Queso',
-    'Arroz Rojo Tradicional',
-    'Papas a la Mexicana',
-    'Champiñones Salteados al Ajillo',
-    'Nopales Asados con Orégano',
-  ]);
-
-  const [catBebidas, setCatBebidas] = useState([
-    'Jugo de Naranja Natural (500ml)',
-    'Café Americano de Olla',
-    'Refresco Embotellado (600ml)',
-    'Té Helado con Limón',
-    'Agua Embotellada Ciel (600ml)',
-    'Agua de Horchata (500ml)',
-    'Agua de Jamaica (500ml)',
-  ]);
-
-  const [catGuisos, setCatGuisos] = useState([
-    'Sencillo',
-    'Chicharrón Prensado en Salsa Roja',
-    'Deshebrada de Res en Salsa Verde',
-    'Tinga de Pollo con Cebolla',
-    'Papas con Chorizo',
-    'Queso con Chile Poblano',
-    'Asado de Puerco',
-    'Chicharrón en Salsa Verde',
-    'Picadillo Tradicional',
-    'Carnitas de Puerco',
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    'Porción de Aguacate',
-    'Queso Gratinado Extra',
-    'Porción de Tocino (3 tiras)',
-    'Salsa Especial de la Casa',
-    'Crema Fresca',
-  ]);
+  const [catDesayunos, setCatDesayunos] = useState([]);
+  const [catPlatosFuertes, setCatPlatosFuertes] = useState([]);
+  const [catAntojitos, setCatAntojitos] = useState([]);
+  const [catTortas, setCatTortas] = useState([]);
+  const [catMolletes, setCatMolletes] = useState([]);
+  const [catEntradas, setCatEntradas] = useState([]);
+  const [catGuarniciones, setCatGuarniciones] = useState([]);
+  const [catBebidas, setCatBebidas] = useState([]);
+  const [catGuisos, setCatGuisos] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   const [alimentosBD, setAlimentosBD] = useState([]);
 
@@ -203,22 +126,44 @@ export default function OrdenesTab() {
         const gui = data.alimentos.filter((a) => a.tipo === 'Guiso' || a.nombre.toLowerCase().includes('guiso')).map((a) => a.nombre);
         const ext = data.alimentos.filter((a) => a.tipo === 'Extra').map((a) => a.nombre);
 
-        if (des.length > 0) setCatDesayunos(des);
-        if (pla.length > 0) setCatPlatosFuertes(pla);
-        if (ant.length > 0) setCatAntojitos(ant);
-        if (tor.length > 0) setCatTortas(tor);
-        if (mol.length > 0) setCatMolletes(mol);
-        if (ent.length > 0) setCatEntradas(ent);
-        if (gua.length > 0) setCatGuarniciones(gua);
-        if (beb.length > 0) setCatBebidas(beb);
-        if (gui.length > 0) setCatGuisos(['Sencillo', ...gui]);
-        if (ext.length > 0) setCatExtras(ext);
+        setCatDesayunos(des || []);
+        setCatPlatosFuertes(pla || []);
+        setCatAntojitos(ant || []);
+        setCatTortas(tor || []);
+        setCatMolletes(mol || []);
+        setCatEntradas(ent || []);
+        setCatGuarniciones(gua || []);
+        setCatBebidas(beb || []);
+        setCatGuisos(gui && gui.length > 0 ? ['Sencillo', ...gui] : []);
+        setCatExtras(ext || []);
 
         return data.alimentos;
       }
+      setAlimentosBD([]);
+      setCatDesayunos([]);
+      setCatPlatosFuertes([]);
+      setCatAntojitos([]);
+      setCatTortas([]);
+      setCatMolletes([]);
+      setCatEntradas([]);
+      setCatGuarniciones([]);
+      setCatBebidas([]);
+      setCatGuisos([]);
+      setCatExtras([]);
       return [];
     } catch (e) {
-      console.log('Usando catálogo local en OrdenesTab:', e.message);
+      console.log('Error al consultar alimentos en OrdenesTab:', e.message);
+      setAlimentosBD([]);
+      setCatDesayunos([]);
+      setCatPlatosFuertes([]);
+      setCatAntojitos([]);
+      setCatTortas([]);
+      setCatMolletes([]);
+      setCatEntradas([]);
+      setCatGuarniciones([]);
+      setCatBebidas([]);
+      setCatGuisos([]);
+      setCatExtras([]);
       return [];
     }
   };

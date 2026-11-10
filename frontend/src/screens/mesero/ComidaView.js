@@ -28,48 +28,11 @@ export default function ComidaView({ onVolverMenu }) {
 
   // Catálogos desde la BD
   const [loading, setLoading] = useState(false);
-  const [catEntradas, setCatEntradas] = useState([
-    { id: 41, nombre: 'Sopa de Fideo Casera', precio: 35 },
-    { id: 42, nombre: 'Crema de Elote Dulce', precio: 45 },
-    { id: 43, nombre: 'Consomé de Pollo con Verduras', precio: 40 },
-    { id: 44, nombre: 'Ensalada Verde de la Casa', precio: 50 },
-    { id: 45, nombre: 'Guacamole Tradicional con Totopos', precio: 65 },
-  ]);
-
-  const [catPlatosFuertes, setCatPlatosFuertes] = useState([
-    { id: 6, nombre: 'Milanesa de Res Empanizada', precio: 110 },
-    { id: 7, nombre: 'Pechuga Rellena de Queso y Jamón', precio: 115 },
-    { id: 8, nombre: 'Carne Asada con Ensalada y Frijoles', precio: 120 },
-    { id: 9, nombre: 'Enchiladas Verdes de Pollo', precio: 95 },
-    { id: 10, nombre: 'Flautas Doradas de Pollo (4 pz)', precio: 85 },
-    { id: 46, nombre: 'Mole Poblano con Pollo y Arroz', precio: 130 },
-    { id: 47, nombre: 'Costillas de Puerco en Salsa Verde', precio: 125 },
-    { id: 48, nombre: 'Birria de Res estilo Jalisco', precio: 135 },
-  ]);
-
-  const [catGuarniciones, setCatGuarniciones] = useState([
-    { id: 51, nombre: 'Frijoles Refritos con Queso', precio: 30 },
-    { id: 52, nombre: 'Arroz Rojo Tradicional', precio: 30 },
-    { id: 53, nombre: 'Papas a la Mexicana', precio: 35 },
-    { id: 54, nombre: 'Champiñones Salteados al Ajillo', precio: 35 },
-    { id: 55, nombre: 'Nopales Asados con Orégano', precio: 30 },
-  ]);
-
-  const [catBebidas, setCatBebidas] = useState([
-    { id: 11, nombre: 'Jugo de Naranja Natural (500ml)', precio: 35 },
-    { id: 12, nombre: 'Café Americano de Olla', precio: 25 },
-    { id: 13, nombre: 'Refresco Embotellado (600ml)', precio: 28 },
-    { id: 14, nombre: 'Té Helado con Limón', precio: 30 },
-    { id: 15, nombre: 'Agua Embotellada Ciel (600ml)', precio: 20 },
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [catEntradas, setCatEntradas] = useState([]);
+  const [catPlatosFuertes, setCatPlatosFuertes] = useState([]);
+  const [catGuarniciones, setCatGuarniciones] = useState([]);
+  const [catBebidas, setCatBebidas] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -98,14 +61,25 @@ export default function ComidaView({ onVolverMenu }) {
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Comida')
         );
 
-        if (bdEntradas.length > 0) setCatEntradas(bdEntradas);
-        if (bdComida.length > 0) setCatPlatosFuertes(bdComida);
-        if (bdGuarniciones.length > 0) setCatGuarniciones(bdGuarniciones);
-        if (bdBebidas.length > 0) setCatBebidas(bdBebidas);
-        if (bdExtras.length > 0) setCatExtras(bdExtras);
+        setCatEntradas(bdEntradas || []);
+        setCatPlatosFuertes(bdComida || []);
+        setCatGuarniciones(bdGuarniciones || []);
+        setCatBebidas(bdBebidas || []);
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatEntradas([]);
+        setCatPlatosFuertes([]);
+        setCatGuarniciones([]);
+        setCatBebidas([]);
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos:', err.message);
+      console.log('Error al consultar alimentos de comida:', err.message);
+      setCatEntradas([]);
+      setCatPlatosFuertes([]);
+      setCatGuarniciones([]);
+      setCatBebidas([]);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }

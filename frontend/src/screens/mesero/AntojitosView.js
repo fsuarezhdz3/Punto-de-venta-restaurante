@@ -28,31 +28,9 @@ export default function AntojitosView({ onVolverMenu }) {
 
   // Catálogos desde la BD
   const [loading, setLoading] = useState(false);
-  const [catAntojitos, setCatAntojitos] = useState([
-    { id: 21, nombre: 'Sopes Tradicionales (3 pz)', precio: 65 },
-    { id: 22, nombre: 'Gorditas de Maíz (2 pz)', precio: 60 },
-    { id: 23, nombre: 'Tlacoyos con Nopales (2 pz)', precio: 55 },
-    { id: 24, nombre: 'Quesadillas Fritas (2 pz)', precio: 65 },
-    { id: 25, nombre: 'Pambazo Preparado', precio: 50 },
-  ]);
-
-  const [catGuisos, setCatGuisos] = useState([
-    { id: 6, nombre: 'Chicharrón Prensado en Salsa Roja', precio: 0, precio_antojito: 15 },
-    { id: 7, nombre: 'Tinga de Pollo Deshebrada', precio: 0, precio_antojito: 15 },
-    { id: 8, nombre: 'Picadillo a la Mexicana', precio: 0, precio_antojito: 10 },
-    { id: 9, nombre: 'Papas con Chorizo', precio: 0, precio_antojito: 10 },
-    { id: 10, nombre: 'Barbacoa de Res', precio: 0, precio_antojito: 20 },
-    { id: 46, nombre: 'Chicharrón en Salsa Verde', precio: 0, precio_antojito: 15 },
-    { id: 47, nombre: 'Queso Oaxaca Gratinado', precio: 0, precio_antojito: 10 },
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [catAntojitos, setCatAntojitos] = useState([]);
+  const [catGuisos, setCatGuisos] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -79,12 +57,19 @@ export default function AntojitosView({ onVolverMenu }) {
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Antojitos')
         );
 
-        if (bdAntojitos.length > 0) setCatAntojitos(bdAntojitos);
-        if (bdGuisos.length > 0) setCatGuisos(bdGuisos);
-        if (bdExtras.length > 0) setCatExtras(bdExtras);
+        setCatAntojitos(bdAntojitos || []);
+        setCatGuisos(bdGuisos || []);
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatAntojitos([]);
+        setCatGuisos([]);
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para antojitos:', err.message);
+      console.log('Error al consultar alimentos de antojitos:', err.message);
+      setCatAntojitos([]);
+      setCatGuisos([]);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }

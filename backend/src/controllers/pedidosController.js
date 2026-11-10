@@ -195,6 +195,17 @@ const crearPedido = async (req, res) => {
 
       // Resolver id_alimento si viene en el payload o buscarlo por nombre en el catálogo
       let idAlimentoFinal = item.id_alimento || item.alimento_id || null;
+      if (idAlimentoFinal) {
+        try {
+          const [alimCheck] = await db.query('SELECT id FROM alimentos WHERE id = ?', [idAlimentoFinal]);
+          if (alimCheck.length === 0) {
+            idAlimentoFinal = null;
+          }
+        } catch (e) {
+          idAlimentoFinal = null;
+        }
+      }
+
       if (!idAlimentoFinal && alimentoTexto) {
         const nombreSinZona = alimentoTexto.replace(/-[a-zA-Z0-9_]+$/g, '').trim();
         const nombreSinCantidad = nombreSinZona.replace(/^\d+x\s*/i, '').trim();

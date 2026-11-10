@@ -28,37 +28,10 @@ export default function DesayunosView({ onVolverMenu }) {
 
   // Catálogos desde la BD
   const [loading, setLoading] = useState(false);
-  const [catDesayunos, setCatDesayunos] = useState([
-    { id: 1, nombre: 'Chilaquiles Verdes con Huevo', precio: 85 },
-    { id: 2, nombre: 'Huevos al Gusto con Jamón o Tocino', precio: 75 },
-    { id: 3, nombre: 'Omelette de Queso y Champiñones', precio: 90 },
-    { id: 4, nombre: 'Huevos Rancheros sobre Tortilla', precio: 80 },
-    { id: 5, nombre: 'Hot Cakes Tradicionales con Mantequilla', precio: 70 },
-  ]);
-
-  const [catGuarniciones, setCatGuarniciones] = useState([
-    { id: 51, nombre: 'Frijoles Refritos con Queso', precio: 30 },
-    { id: 52, nombre: 'Arroz Rojo Tradicional', precio: 30 },
-    { id: 53, nombre: 'Papas a la Mexicana', precio: 35 },
-    { id: 54, nombre: 'Champiñones Salteados al Ajillo', precio: 35 },
-    { id: 55, nombre: 'Nopales Asados con Orégano', precio: 30 },
-  ]);
-
-  const [catBebidas, setCatBebidas] = useState([
-    { id: 11, nombre: 'Jugo de Naranja Natural (500ml)', precio: 35 },
-    { id: 12, nombre: 'Café Americano de Olla', precio: 25 },
-    { id: 13, nombre: 'Refresco Embotellado (600ml)', precio: 28 },
-    { id: 14, nombre: 'Té Helado con Limón', precio: 30 },
-    { id: 15, nombre: 'Agua Embotellada Ciel (600ml)', precio: 20 },
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [catDesayunos, setCatDesayunos] = useState([]);
+  const [catGuarniciones, setCatGuarniciones] = useState([]);
+  const [catBebidas, setCatBebidas] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -85,13 +58,22 @@ export default function DesayunosView({ onVolverMenu }) {
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Desayunos')
         );
 
-        if (bdDesayunos.length > 0) setCatDesayunos(bdDesayunos);
-        if (bdGuarniciones.length > 0) setCatGuarniciones(bdGuarniciones);
-        if (bdBebidas.length > 0) setCatBebidas(bdBebidas);
-        if (bdExtras.length > 0) setCatExtras(bdExtras);
+        setCatDesayunos(bdDesayunos || []);
+        setCatGuarniciones(bdGuarniciones || []);
+        setCatBebidas(bdBebidas || []);
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatDesayunos([]);
+        setCatGuarniciones([]);
+        setCatBebidas([]);
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos:', err.message);
+      console.log('Error al consultar alimentos de desayunos:', err.message);
+      setCatDesayunos([]);
+      setCatGuarniciones([]);
+      setCatBebidas([]);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }

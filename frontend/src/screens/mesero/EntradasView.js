@@ -22,13 +22,7 @@ export default function EntradasView({ onVolverMenu }) {
   // Lista de entradas disponibles en catálogo (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catEntradas, setCatEntradas] = useState([
-    { id: 41, nombre: 'Sopa de Fideo Casera', tipo: 'Entrada', precio: 35 },
-    { id: 42, nombre: 'Crema de Elote Dulce con Crutones', tipo: 'Entrada', precio: 45 },
-    { id: 43, nombre: 'Consomé de Pollo con Verduras', tipo: 'Entrada', precio: 40 },
-    { id: 44, nombre: 'Ensalada Verde de la Casa', tipo: 'Entrada', precio: 50 },
-    { id: 45, nombre: 'Guacamole Tradicional con Totopos', tipo: 'Entrada', precio: 65 },
-  ]);
+  const [catEntradas, setCatEntradas] = useState([]);
 
   // Preorden / Comanda activa de entradas para esta mesa
   const [preorden, setPreorden] = useState([]);
@@ -48,12 +42,13 @@ export default function EntradasView({ onVolverMenu }) {
         const bdEntradas = data.alimentos.filter(
           (a) => a.tipo === 'Entrada' || a.tipo === 'Entradas'
         );
-        if (bdEntradas.length > 0) {
-          setCatEntradas(bdEntradas);
-        }
+        setCatEntradas(bdEntradas || []);
+      } else {
+        setCatEntradas([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para entradas:', err.message);
+      console.log('Error al consultar entradas:', err.message);
+      setCatEntradas([]);
     } finally {
       setLoading(false);
     }

@@ -22,16 +22,7 @@ export default function ExtrasView({ onVolverMenu }) {
   // Lista de extras disponibles en catálogo (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate Hass', tipo: 'Extra', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', tipo: 'Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', tipo: 'Extra', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', tipo: 'Extra', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', tipo: 'Extra', precio: 10 },
-    { id: 56, nombre: 'Orden de Tortillas Hechas a Mano (4 pz)', tipo: 'Extra', precio: 15 },
-    { id: 57, nombre: 'Porción de Frijoles Refritos Extra', tipo: 'Extra', precio: 25 },
-    { id: 58, nombre: 'Chiles Toreados con Cebollitas (2 pz)', tipo: 'Extra', precio: 20 },
-  ]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Preorden / Comanda activa de extras para esta mesa
   const [preorden, setPreorden] = useState([]);
@@ -51,12 +42,13 @@ export default function ExtrasView({ onVolverMenu }) {
         const bdExtras = data.alimentos.filter(
           (a) => a.tipo === 'Extra' || a.tipo === 'Extras'
         );
-        if (bdExtras.length > 0) {
-          setCatExtras(bdExtras);
-        }
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para extras:', err.message);
+      console.log('Error al consultar extras:', err.message);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }

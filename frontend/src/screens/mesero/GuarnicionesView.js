@@ -22,13 +22,7 @@ export default function GuarnicionesView({ onVolverMenu }) {
   // Lista de guarniciones disponibles en catálogo a la carta (desde BD)
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const [catGuarniciones, setCatGuarniciones] = useState([
-    { id: 51, nombre: 'Frijoles Refritos con Queso A la Carta', tipo: 'Guarnicion', precio: 30 },
-    { id: 52, nombre: 'Arroz Rojo Tradicional A la Carta', tipo: 'Guarnicion', precio: 30 },
-    { id: 53, nombre: 'Papas a la Mexicana A la Carta', tipo: 'Guarnicion', precio: 35 },
-    { id: 54, nombre: 'Champiñones Salteados al Ajillo A la Carta', tipo: 'Guarnicion', precio: 35 },
-    { id: 55, nombre: 'Nopales Asados con Orégano A la Carta', tipo: 'Guarnicion', precio: 30 },
-  ]);
+  const [catGuarniciones, setCatGuarniciones] = useState([]);
 
   // Preorden / Comanda activa de guarniciones
   const [preorden, setPreorden] = useState([]);
@@ -48,12 +42,13 @@ export default function GuarnicionesView({ onVolverMenu }) {
         const bdGuarniciones = data.alimentos.filter(
           (a) => a.tipo === 'Guarnicion' || a.tipo === 'Guarniciones'
         );
-        if (bdGuarniciones.length > 0) {
-          setCatGuarniciones(bdGuarniciones);
-        }
+        setCatGuarniciones(bdGuarniciones || []);
+      } else {
+        setCatGuarniciones([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para guarniciones:', err.message);
+      console.log('Error al consultar guarniciones:', err.message);
+      setCatGuarniciones([]);
     } finally {
       setLoading(false);
     }

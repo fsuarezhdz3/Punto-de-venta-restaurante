@@ -28,23 +28,8 @@ export default function TortasView({ onVolverMenu }) {
 
   // Catálogos desde la BD
   const [loading, setLoading] = useState(false);
-  const [catTortas, setCatTortas] = useState([
-    { id: 26, nombre: 'Torta Cubana Especial', precio: 95 },
-    { id: 27, nombre: 'Torta de Milanesa de Res con Queso', precio: 75 },
-    { id: 28, nombre: 'Torta de Pierna Adobada', precio: 75 },
-    { id: 29, nombre: 'Torta de Jamón con Queso Oaxaca', precio: 60 },
-    { id: 30, nombre: 'Torta de Chorizo con Huevo', precio: 65 },
-    { id: 49, nombre: 'Torta de Pastor Especial', precio: 70 },
-    { id: 50, nombre: 'Torta de Milanesa de Pollo', precio: 75 },
-  ]);
-
-  const [catExtras, setCatExtras] = useState([
-    { id: 31, nombre: 'Porción de Aguacate', precio: 20 },
-    { id: 32, nombre: 'Queso Gratinado Extra', precio: 15 },
-    { id: 33, nombre: 'Porción de Tocino (3 tiras)', precio: 25 },
-    { id: 34, nombre: 'Salsa Especial de la Casa', precio: 10 },
-    { id: 35, nombre: 'Crema Fresca', precio: 10 },
-  ]);
+  const [catTortas, setCatTortas] = useState([]);
+  const [catExtras, setCatExtras] = useState([]);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -68,11 +53,16 @@ export default function TortasView({ onVolverMenu }) {
           (a) => (a.tipo === 'Extra' || a.tipo === 'Extras') && extraAplicaACategoria(a, 'Tortas')
         );
 
-        if (bdTortas.length > 0) setCatTortas(bdTortas);
-        if (bdExtras.length > 0) setCatExtras(bdExtras);
+        setCatTortas(bdTortas || []);
+        setCatExtras(bdExtras || []);
+      } else {
+        setCatTortas([]);
+        setCatExtras([]);
       }
     } catch (err) {
-      console.log('Utilizando catálogo local de respaldos para tortas:', err.message);
+      console.log('Error al consultar tortas:', err.message);
+      setCatTortas([]);
+      setCatExtras([]);
     } finally {
       setLoading(false);
     }
