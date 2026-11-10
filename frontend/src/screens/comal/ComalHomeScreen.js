@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
+import { reproducirNotificacionComanda } from '../../utils/soundHelper';
 
 export default function ComalHomeScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -26,6 +27,7 @@ export default function ComalHomeScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tabActiva, setTabActiva] = useState('pendientes'); // 'pendientes' | 'historial'
+  const conocidosIdsRef = useRef(null);
 
   // Mapa de bloques marcados ({ `${itemId}_${blockId}`: boolean })
   const [checkedMap, setCheckedMap] = useState({});
@@ -54,6 +56,16 @@ export default function ComalHomeScreen() {
       const data = await res.json();
 
       if (res.ok && data.items) {
+        if (tabActiva === 'pendientes') {
+          // Si ya teníamos ítems cargados y llega uno nuevo, activar la campanada y vibración
+          if (conocidosIdsRef.current !== null) {
+            const hayNuevos = data.items.some((item) => !conocidosIdsRef.current.has(item.id));
+            if (hayNuevos) {
+              reproducirNotificacionComanda();
+            }
+          }
+          conocidosIdsRef.current = new Set(data.items.map((item) => item.id));
+        }
         setItemsComal(data.items);
       } else {
         setItemsComal([]);
@@ -155,9 +167,19 @@ export default function ComalHomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color="#DC2626" />
-        </TouchableOpacity>
+        <View style={styles.rightButtonsRow}>
+          <TouchableOpacity
+            style={styles.soundButton}
+            onPress={() => reproducirNotificacionComanda()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="volume-high-outline" size={20} color="#D97706" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* PESTAÑAS (PENDIENTES VS HISTORIAL DEL DÍA) */}
@@ -380,6 +402,21 @@ const styles = StyleSheet.create({
     color: '#D97706',
     fontWeight: '700',
     marginTop: 2,
+  },
+  rightButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#FDE68A',
   },
   logoutButton: {
     width: 40,

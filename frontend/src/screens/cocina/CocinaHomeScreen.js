@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -17,6 +17,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
+import { reproducirNotificacionComanda } from '../../utils/soundHelper';
 
 export default function CocinaHomeScreen() {
   const { user, logout } = useContext(AuthContext);
@@ -26,6 +27,7 @@ export default function CocinaHomeScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [tabActiva, setTabActiva] = useState('pendientes'); // 'pendientes' | 'historial'
+  const conocidosIdsRef = useRef(null);
 
   // Cargar comandas de cocina en tiempo real (auto-refresh silencioso cada 3s)
   useEffect(() => {
@@ -51,6 +53,16 @@ export default function CocinaHomeScreen() {
       const data = await res.json();
 
       if (res.ok && data.items) {
+        if (tabActiva === 'pendientes') {
+          // Si ya teníamos ítems cargados y llega uno nuevo, activar la campanada y vibración
+          if (conocidosIdsRef.current !== null) {
+            const hayNuevos = data.items.some((item) => !conocidosIdsRef.current.has(item.id));
+            if (hayNuevos) {
+              reproducirNotificacionComanda();
+            }
+          }
+          conocidosIdsRef.current = new Set(data.items.map((item) => item.id));
+        }
         setItemsCocina(data.items);
       } else {
         setItemsCocina([]);
@@ -176,9 +188,19 @@ export default function CocinaHomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color="#0D9488" />
-        </TouchableOpacity>
+        <View style={styles.rightButtonsRow}>
+          <TouchableOpacity
+            style={styles.soundButton}
+            onPress={() => reproducirNotificacionComanda()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="volume-high-outline" size={20} color="#0D9488" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={20} color="#0D9488" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* PESTAÑAS (PENDIENTES VS HISTORIAL DEL DÍA) */}
@@ -436,6 +458,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     color: '#0D9488',
+  },
+  rightButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundButton: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#CCFBF1',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
   },
   logoutButton: {
     width: 38,

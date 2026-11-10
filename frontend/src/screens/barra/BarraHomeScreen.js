@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from 'react';
+import React, { useState, useEffect, useContext, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -16,6 +16,7 @@ import { StatusBar } from 'expo-status-bar';
 import { Ionicons } from '@expo/vector-icons';
 import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
+import { reproducirNotificacionComanda } from '../../utils/soundHelper';
 
 // Helper inteligente para parsear la metadata del paquete (guarniciones, bebida, extras)
 const parseMeta = (extrasStr, comentariosStr = '') => {
@@ -73,6 +74,7 @@ export default function BarraHomeScreen() {
 
   // Tab activo ('pendientes' o 'historial')
   const [tabActiva, setTabActiva] = useState('pendientes');
+  const conocidosIdsRef = useRef(null);
 
   // Estados de datos
   const [pendientes, setPendientes] = useState([]);
@@ -80,13 +82,23 @@ export default function BarraHomeScreen() {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  // Cargar órdenes al montar o cambiar de pestaña
+  // Cargar órdenes al montar o cambiar de pestaña, con auto-refresh silencioso cada 3s
   useEffect(() => {
-    cargarDatos();
+    cargarDatos(pendientes.length === 0 && historialHoy.length === 0);
+
+    const timer = setInterval(() => {
+      if (tabActiva === 'pendientes') {
+        cargarPendientes(false);
+      } else {
+        cargarHistorialHoy(false);
+      }
+    }, 3000);
+
+    return () => clearInterval(timer);
   }, [tabActiva]);
 
-  const cargarDatos = async () => {
-    setLoading(true);
+  const cargarDatos = async (mostrarLoading = true) => {
+    if (mostrarLoading) setLoading(true);
     if (tabActiva === 'pendientes') {
       await cargarPendientes();
     } else {
@@ -102,6 +114,14 @@ export default function BarraHomeScreen() {
       const res = await fetch(`${API_URL}/pedidos/barra/pendientes`);
       const data = await res.json();
       if (res.ok && data.items) {
+        // Si ya teníamos comandas cargadas y llega alguna nueva, reproducir sonido y vibrar
+        if (conocidosIdsRef.current !== null) {
+          const hayNuevos = data.items.some((item) => !conocidosIdsRef.current.has(item.id));
+          if (hayNuevos) {
+            reproducirNotificacionComanda();
+          }
+        }
+        conocidosIdsRef.current = new Set(data.items.map((item) => item.id));
         setPendientes(data.items);
       } else {
         setPendientes([]);
@@ -199,9 +219,19 @@ export default function BarraHomeScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.7}>
-          <Ionicons name="log-out-outline" size={20} color="#DC2626" />
-        </TouchableOpacity>
+        <View style={styles.rightButtonsRow}>
+          <TouchableOpacity
+            style={styles.soundBtn}
+            onPress={() => reproducirNotificacionComanda()}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="volume-high-outline" size={20} color="#0D9488" />
+          </TouchableOpacity>
+
+          <TouchableOpacity style={styles.logoutBtn} onPress={logout} activeOpacity={0.7}>
+            <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* TABS DE SELECCIÓN (PENDIENTES VS HISTORIAL) */}
@@ -565,6 +595,21 @@ const styles = StyleSheet.create({
   headerUserBold: {
     color: '#0D9488',
     fontWeight: '800',
+  },
+  rightButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  soundBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: 'rgba(13, 148, 136, 0.15)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(13, 148, 136, 0.3)',
   },
   logoutBtn: {
     width: 40,
