@@ -2,7 +2,7 @@ import React, { createContext, useState } from 'react';
 
 export const MeseroContext = createContext();
 
-export const MeseroProvider = ({ children }) => {
+export const MeseroProvider = ({ children, user }) => {
   // Tab activo: 'mesas', 'menu', 'ordenes' (por defecto 'mesas')
   const [activeTab, setActiveTab] = useState('mesas');
 
@@ -114,6 +114,7 @@ export const MeseroProvider = ({ children }) => {
         hideSinMesaModal,
         irASeleccionarMesa,
         checkMesaSeleccionada,
+        user,
       }}
     >
       {children}

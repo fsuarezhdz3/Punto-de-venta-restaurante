@@ -135,7 +135,7 @@ export default function ModalPedidoEspecial({ visible, onClose }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           num_mesa: numMesa,
-          cuenta_id: user?.id || 3,
+          cuenta_id: user?.id || null,
           items: itemsPayload,
         }),
       });

@@ -21,7 +21,7 @@ import { extraAplicaACategoria } from '../../utils/extrasHelper';
 export default function MolletesView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
   const cardWidthResponsive = width > 900 ? '48.8%' : '100%';
-  const { selectedMesa, setActiveTab, showSuccessNotification, showSinMesaModal } = useContext(MeseroContext);
+  const { selectedMesa, setActiveTab, showSuccessNotification, showSinMesaModal, user } = useContext(MeseroContext);
 
   // Lista de paquetes de molletes (Paquete 1, Paquete 2, ...)
   const [paquetes, setPaquetes] = useState([]);
@@ -215,7 +215,7 @@ export default function MolletesView({ onVolverMenu }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           num_mesa: numMesa,
-          cuenta_id: 3,
+          cuenta_id: user?.id || null,
           items: itemsPayload,
         }),
       });

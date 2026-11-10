@@ -17,7 +17,7 @@ import { API_URL } from '../../config/api';
 export default function OtrosView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
   const cardWidthResponsive = width > 900 ? '48.8%' : '100%';
-  const { selectedMesa, showSuccessNotification, showSinMesaModal } = useContext(MeseroContext);
+  const { selectedMesa, showSuccessNotification, showSinMesaModal, user } = useContext(MeseroContext);
 
   // Lista de alimentos en categoría "Otros" (desde BD)
   const [loading, setLoading] = useState(false);
@@ -107,7 +107,7 @@ export default function OtrosView({ onVolverMenu }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           num_mesa: numMesa,
-          cuenta_id: 3,
+          cuenta_id: user?.id || null,
           items: itemsPayload,
         }),
       });

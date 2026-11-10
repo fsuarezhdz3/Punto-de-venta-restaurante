@@ -3,6 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
+import { AuthContext } from '../../context/AuthContext';
 import { MeseroContext, MeseroProvider } from '../../context/MeseroContext';
 import MeseroHeader from '../../components/MeseroHeader';
 import MeseroFooter from '../../components/MeseroFooter';
@@ -68,8 +69,10 @@ function MeseroContent() {
 }
 
 export default function MeseroHomeScreen() {
+  const { user } = useContext(AuthContext);
+
   return (
-    <MeseroProvider>
+    <MeseroProvider user={user}>
       <MeseroContent />
     </MeseroProvider>
   );

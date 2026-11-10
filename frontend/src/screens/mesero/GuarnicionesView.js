@@ -17,7 +17,7 @@ import { API_URL } from '../../config/api';
 export default function GuarnicionesView({ onVolverMenu }) {
   const { width } = useWindowDimensions();
   const cardWidthResponsive = width > 900 ? '48.8%' : '100%';
-  const { selectedMesa, setActiveTab, showSuccessNotification, showSinMesaModal } = useContext(MeseroContext);
+  const { selectedMesa, setActiveTab, showSuccessNotification, showSinMesaModal, user } = useContext(MeseroContext);
 
   // Lista de guarniciones disponibles en catálogo a la carta (desde BD)
   const [loading, setLoading] = useState(false);
@@ -126,7 +126,7 @@ export default function GuarnicionesView({ onVolverMenu }) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           num_mesa: numMesa,
-          cuenta_id: 3,
+          cuenta_id: user?.id || null,
           items: itemsPayload,
         }),
       });

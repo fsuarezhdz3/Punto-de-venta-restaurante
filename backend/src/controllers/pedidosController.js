@@ -89,8 +89,51 @@ const crearPedido = async (req, res) => {
     return res.status(400).json({ error: 'Datos insuficientes para registrar la comanda' });
   }
 
-  const cuentaIdFinal = cuenta_id || 3; // Por defecto mesero1 si no se envía
   const numMesaInt = Number(num_mesa);
+
+  // Resolver cuenta_id de manera segura para evitar fallos de Foreign Key
+  let cuentaIdFinal = null;
+  if (cuenta_id !== undefined && cuenta_id !== null && !isNaN(Number(cuenta_id))) {
+    try {
+      const [cuentaExiste] = await db.query('SELECT id FROM cuentas WHERE id = ? LIMIT 1', [Number(cuenta_id)]);
+      if (cuentaExiste.length > 0) {
+        cuentaIdFinal = cuentaExiste[0].id;
+      }
+    } catch (errCheck) {
+      console.warn('Error al verificar cuenta_id recibido:', errCheck.message);
+    }
+  }
+
+  // Si no se envió o no existe el ID en la BD, buscar una cuenta de mesero o la primera cuenta existente
+  if (!cuentaIdFinal) {
+    try {
+      const [meseroDefault] = await db.query(
+        "SELECT id FROM cuentas WHERE LOWER(tipo) = 'mesero' OR LOWER(tipo) LIKE '%mesero%' ORDER BY id ASC LIMIT 1"
+      );
+      if (meseroDefault.length > 0) {
+        cuentaIdFinal = meseroDefault[0].id;
+      } else {
+        const [primeraCuenta] = await db.query('SELECT id FROM cuentas ORDER BY id ASC LIMIT 1');
+        if (primeraCuenta.length > 0) {
+          cuentaIdFinal = primeraCuenta[0].id;
+        }
+      }
+    } catch (errFallback) {
+      console.warn('Error al buscar cuenta por defecto:', errFallback.message);
+    }
+  }
+
+  // Si la tabla cuentas está vacía por alguna razón, crear una cuenta mesero por defecto
+  if (!cuentaIdFinal) {
+    try {
+      const [insRes] = await db.query(
+        "INSERT INTO cuentas (nombre, contrasena, tipo, estado) VALUES ('Mesero Principal', '$2a$10$abcdefghijklmnopqrstuvwxyz123456', 'mesero', 1)"
+      );
+      cuentaIdFinal = insRes.insertId;
+    } catch (errCrear) {
+      console.warn('Error al crear cuenta mesero de respaldo:', errCrear.message);
+    }
+  }
 
   try {
     // Asegurar que la tabla alimentos_pedidos tenga las columnas necesarias
