@@ -14,8 +14,7 @@
         "foregroundImage": "./assets/iconoapp.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.lacocina.pos",
-      "usesCleartextTraffic": true
+      "package": "com.lacocina.pos"
     },
     "web": {
       "favicon": "./assets/iconoapp.png"
@@ -40,7 +39,8 @@
             "usesCleartextTraffic": true
           }
         }
-      ]
+      ],
+      "expo-audio"
     ],
     "extra": {
       "eas": {

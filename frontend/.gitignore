@@ -3,6 +3,8 @@ node_modules/
 
 # Expo & React Native
 .expo/
+android/
+ios/
 web-build/
 dist/
 dist-electron/

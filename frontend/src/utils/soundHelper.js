@@ -1,10 +1,20 @@
 import { Platform, Vibration } from 'react-native';
 
-let expoAudio = null;
-try {
-  expoAudio = require('expo-av').Audio;
-} catch (e) {
-  // Fallback si no está disponible en el entorno
+let nativePlayer = null;
+
+function getNativePlayer() {
+  if (Platform.OS === 'web') return null;
+  if (!nativePlayer) {
+    try {
+      const { createAudioPlayer } = require('expo-audio');
+      if (createAudioPlayer) {
+        nativePlayer = createAudioPlayer(require('../../assets/notificacion.wav'));
+      }
+    } catch (e) {
+      console.warn('No se pudo inicializar expo-audio:', e);
+    }
+  }
+  return nativePlayer;
 }
 
 let webAudioContext = null;
@@ -100,24 +110,12 @@ export async function reproducirNotificacionComanda() {
 
   // 3. Si estamos en App Nativa (Android / iOS)
   try {
-    if (expoAudio) {
-      await expoAudio.setAudioModeAsync({
-        playsInSilentModeIOS: true,
-        shouldDuckAndroid: true,
-        playThroughEarpieceAndroid: false,
-      }).catch(() => {});
-
-      const { sound } = await expoAudio.Sound.createAsync(
-        require('../../assets/notificacion.wav'),
-        { shouldPlay: true, volume: 1.0 }
-      );
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync().catch(() => {});
-        }
-      });
+    const player = getNativePlayer();
+    if (player) {
+      player.seekTo(0);
+      player.play();
     }
   } catch (e) {
-    console.warn('Error al reproducir audio nativo expo-av:', e);
+    console.warn('Error al reproducir audio nativo expo-audio:', e);
   }
 }
