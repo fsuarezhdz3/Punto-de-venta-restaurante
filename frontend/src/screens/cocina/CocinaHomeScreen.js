@@ -10,6 +10,7 @@ import {
   Alert,
   useWindowDimensions,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -28,6 +29,27 @@ export default function CocinaHomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [tabActiva, setTabActiva] = useState('pendientes'); // 'pendientes' | 'historial'
   const conocidosIdsRef = useRef(null);
+
+  // Manejo del botón Atrás del sistema Android
+  useEffect(() => {
+    const onBackPress = () => {
+      if (tabActiva === 'historial') {
+        setTabActiva('pendientes');
+        return true;
+      }
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [tabActiva]);
 
   // Cargar comandas de cocina en tiempo real (auto-refresh silencioso cada 3s)
   useEffect(() => {

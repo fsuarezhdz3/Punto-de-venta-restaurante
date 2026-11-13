@@ -10,6 +10,7 @@ import {
   RefreshControl,
   useWindowDimensions,
   Platform,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -81,6 +82,27 @@ export default function BarraHomeScreen() {
   const [historialHoy, setHistorialHoy] = useState([]);
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
+  // Manejo del botón Atrás del sistema Android
+  useEffect(() => {
+    const onBackPress = () => {
+      if (tabActiva === 'historial') {
+        setTabActiva('pendientes');
+        return true;
+      }
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [tabActiva]);
 
   // Cargar órdenes al montar o cambiar de pestaña, con auto-refresh silencioso cada 3s
   useEffect(() => {

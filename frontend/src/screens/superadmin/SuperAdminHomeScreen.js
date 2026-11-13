@@ -15,6 +15,7 @@ import {
   Platform,
   useWindowDimensions,
   Pressable,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -250,6 +251,82 @@ export default function SuperAdminHomeScreen() {
   const [nuevoPrecioRegular, setNuevoPrecioRegular] = useState('');
   const [modificarEstadoMasivo, setModificarEstadoMasivo] = useState(false);
   const [nuevoEstadoMasivo, setNuevoEstadoMasivo] = useState(1);
+
+  // Manejo del botón Atrás del sistema Android
+  useEffect(() => {
+    const onBackPress = () => {
+      // 1. Cerrar cualquier modal abierto
+      if (modalTicketVisible) {
+        setModalTicketVisible(false);
+        return true;
+      }
+      if (modalGeneradorVisible) {
+        setModalGeneradorVisible(false);
+        return true;
+      }
+      if (modalRankingVisible) {
+        setModalRankingVisible(false);
+        return true;
+      }
+      if (modalCorteDetalleVisible) {
+        setModalCorteDetalleVisible(false);
+        return true;
+      }
+      if (modalCuentaVisible) {
+        setModalCuentaVisible(false);
+        return true;
+      }
+      if (alimentoModalVisible) {
+        setAlimentoModalVisible(false);
+        return true;
+      }
+      if (modalMasivoVisible) {
+        setModalMasivoVisible(false);
+        return true;
+      }
+      if (calendarioModal?.visible) {
+        setCalendarioModal((prev) => ({ ...prev, visible: false }));
+        return true;
+      }
+
+      // 2. Si está en pestaña menú y no en menú del día principal, volver al menú del día
+      if (activeTab === 'menu' && vistaMenuModo !== 'menu_dia_ver') {
+        setVistaMenuModo('menu_dia_ver');
+        return true;
+      }
+
+      // 3. Si está en otra pestaña que no sea dashboard, regresar a dashboard
+      if (activeTab !== 'dashboard') {
+        setActiveTab('dashboard');
+        return true;
+      }
+
+      // 4. Si está en el dashboard raíz, confirmar salida
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [
+    modalTicketVisible,
+    modalGeneradorVisible,
+    modalRankingVisible,
+    modalCorteDetalleVisible,
+    modalCuentaVisible,
+    alimentoModalVisible,
+    modalMasivoVisible,
+    calendarioModal,
+    activeTab,
+    vistaMenuModo,
+  ]);
 
   // ==========================================
   // ESTADOS HISTORIAL VENTAS POR DÍA

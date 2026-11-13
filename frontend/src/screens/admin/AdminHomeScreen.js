@@ -14,6 +14,7 @@ import {
   useWindowDimensions,
   Platform,
   Pressable,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
@@ -215,6 +216,92 @@ export default function AdminHomeScreen() {
   const [nuevoPrecioRegular, setNuevoPrecioRegular] = useState('');
   const [modificarEstadoMasivo, setModificarEstadoMasivo] = useState(false);
   const [nuevoEstadoMasivo, setNuevoEstadoMasivo] = useState(1);
+
+  // Manejo del botón Atrás del sistema Android
+  useEffect(() => {
+    const onBackPress = () => {
+      // 1. Cerrar cualquier modal que esté abierto
+      if (modalTicketVisible) {
+        setModalTicketVisible(false);
+        return true;
+      }
+      if (modalGeneradorVisible) {
+        setModalGeneradorVisible(false);
+        return true;
+      }
+      if (alimentoModalVisible) {
+        setAlimentoModalVisible(false);
+        return true;
+      }
+      if (modalMasivoVisible) {
+        setModalMasivoVisible(false);
+        return true;
+      }
+      if (cobroModalVisible) {
+        setCobroModalVisible(false);
+        return true;
+      }
+      if (modalJustificacionVisible) {
+        setModalJustificacionVisible(false);
+        return true;
+      }
+      if (modalIniciarCorteVisible) {
+        setModalIniciarCorteVisible(false);
+        return true;
+      }
+      if (modalMovimientoVisible) {
+        setModalMovimientoVisible(false);
+        return true;
+      }
+      if (modalCerrarCorteVisible) {
+        setModalCerrarCorteVisible(false);
+        return true;
+      }
+      if (modalCorteRequeridoVisible) {
+        setModalCorteRequeridoVisible(false);
+        return true;
+      }
+
+      // 2. Si está en pestaña alimentos pero no en vista principal de menú del día
+      if (activeTab === 'alimentos' && vistaMenuModo !== 'menu_dia_ver') {
+        setVistaMenuModo('menu_dia_ver');
+        return true;
+      }
+
+      // 3. Si está en otra pestaña que no sea comandas, regresar a comandas
+      if (activeTab !== 'comandas') {
+        setActiveTab('comandas');
+        return true;
+      }
+
+      // 4. Si está en la raíz (comandas), confirmar salida
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
+  }, [
+    modalTicketVisible,
+    modalGeneradorVisible,
+    alimentoModalVisible,
+    modalMasivoVisible,
+    cobroModalVisible,
+    modalJustificacionVisible,
+    modalIniciarCorteVisible,
+    modalMovimientoVisible,
+    modalCerrarCorteVisible,
+    modalCorteRequeridoVisible,
+    activeTab,
+    vistaMenuModo,
+  ]);
 
   // Cargar comanda global, catálogo, precios globales y corte de caja periódicamente
   useEffect(() => {

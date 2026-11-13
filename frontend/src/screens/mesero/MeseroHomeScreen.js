@@ -1,5 +1,5 @@
-import React, { useContext } from 'react';
-import { StyleSheet, View } from 'react-native';
+import React, { useContext, useEffect } from 'react';
+import { StyleSheet, View, BackHandler, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 
@@ -17,12 +17,76 @@ import OrdenesTab from './OrdenesTab';
 function MeseroContent() {
   const {
     activeTab,
+    setActiveTab,
+    activeCategoryView,
+    setActiveCategoryView,
+    selectedMesa,
+    clearMesa,
     notificationState,
     hideSuccessNotification,
     sinMesaModalVisible,
     hideSinMesaModal,
     irASeleccionarMesa,
   } = useContext(MeseroContext);
+
+  // Manejar el botón físico o gestual de 'Atrás' del sistema Android
+  useEffect(() => {
+    const handleBackPress = () => {
+      // 1. Si modal de sin mesa está visible, cerrarlo
+      if (sinMesaModalVisible) {
+        hideSinMesaModal();
+        return true;
+      }
+
+      // 2. Si modal de notificación de éxito está visible, cerrarlo
+      if (notificationState?.visible) {
+        hideSuccessNotification();
+        return true;
+      }
+
+      // 3. Si está dentro de una categoría del menú (ej. Desayunos, Comida, etc.), regresar al grid de categorías
+      if (activeCategoryView) {
+        setActiveCategoryView(null);
+        return true;
+      }
+
+      // 4. Si está en la pestaña Menú o en Órdenes, regresar a la pestaña Mesas
+      if (activeTab !== 'mesas') {
+        setActiveTab('mesas');
+        return true;
+      }
+
+      // 5. Si está en Mesas y hay una mesa seleccionada, deseleccionarla
+      if (selectedMesa) {
+        clearMesa();
+        return true;
+      }
+
+      // 6. Si está en la raíz de Mesas sin mesa seleccionada, confirmar antes de salir
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      handleBackPress
+    );
+
+    return () => subscription.remove();
+  }, [
+    activeTab,
+    activeCategoryView,
+    selectedMesa,
+    sinMesaModalVisible,
+    notificationState?.visible,
+  ]);
 
   const renderActiveTab = () => {
     switch (activeTab) {

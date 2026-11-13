@@ -10,6 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Keyboard,
+  Alert,
+  BackHandler,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -66,6 +68,23 @@ export default function LoginScreen() {
       showSub.remove();
       hideSub.remove();
     };
+  }, []);
+
+  // Manejo de botón Atrás del sistema Android en Login
+  useEffect(() => {
+    const onBackPress = () => {
+      Alert.alert(
+        'Salir de la aplicación',
+        '¿Deseas salir de la aplicación?',
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Salir', style: 'destructive', onPress: () => BackHandler.exitApp() },
+        ]
+      );
+      return true;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => sub.remove();
   }, []);
 
   const handleInputFocus = (field) => {
