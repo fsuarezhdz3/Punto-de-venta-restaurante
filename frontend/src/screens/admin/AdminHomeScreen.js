@@ -122,7 +122,7 @@ export default function AdminHomeScreen() {
   const [loadingAlimentos, setLoadingAlimentos] = useState(false);
   const [vistaMenuModo, setVistaMenuModo] = useState('menu_dia_ver'); // 'menu_dia_ver' (default) | 'menu_dia_editar' | 'catalogo'
   const [catFiltroMenu, setCatFiltroMenu] = useState('Todas'); // 'Todas' | 'Comida' | 'Desayuno' | 'Antojito' | 'Bebida' | 'Entrada'
-  const [catFiltroMenuDia, setCatFiltroMenuDia] = useState('Todas'); // 'Todas' | 'Desayunos' | 'Comida' | 'Entradas' | 'Aguas' | 'Guarniciones' | 'Postres'
+  const [catFiltroMenuDia, setCatFiltroMenuDia] = useState('Desayunos'); // 'Desayunos' | 'Comida' | 'Entradas' | 'Aguas' | 'Guarniciones' | 'Postres'
 
   // Helper para verificar si un alimento o tipo pertenece al menú del día configurable
   const esTipoMenuDia = (itemOrTipo = '', optionalItem = null) => {
@@ -1715,9 +1715,8 @@ export default function AdminHomeScreen() {
             </View>
 
             {/* SELECTOR DE CATEGORÍAS DEL MENÚ DEL DÍA */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+            <View style={styles.catFiltrosWrapContainer}>
               {[
-                { id: 'Todas', label: 'Todos' },
                 { id: 'Desayunos', label: 'Desayunos' },
                 { id: 'Comida', label: 'Comida' },
                 { id: 'Entradas', label: 'Entradas' },
@@ -1730,7 +1729,6 @@ export default function AdminHomeScreen() {
                   style={[
                     styles.catFiltroChip,
                     catFiltroMenuDia === catObj.id && styles.catFiltroChipActive,
-                    { marginRight: 6 }
                   ]}
                   onPress={() => setCatFiltroMenuDia(catObj.id)}
                   activeOpacity={0.8}
@@ -1740,7 +1738,7 @@ export default function AdminHomeScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
             {loadingAlimentos && !refreshing ? (
               <ActivityIndicator size="large" color="#0D9488" style={{ marginVertical: 30 }} />
@@ -1778,9 +1776,8 @@ export default function AdminHomeScreen() {
         {vistaMenuModo === 'menu_dia_editar' && (
           <View>
             {/* SELECTOR DE CATEGORÍAS EN EDICIÓN DEL MENÚ DEL DÍA */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }}>
+            <View style={styles.catFiltrosWrapContainer}>
               {[
-                { id: 'Todas', label: 'Todos' },
                 { id: 'Desayunos', label: 'Desayunos' },
                 { id: 'Comida', label: 'Comida' },
                 { id: 'Entradas', label: 'Entradas' },
@@ -1793,7 +1790,6 @@ export default function AdminHomeScreen() {
                   style={[
                     styles.catFiltroChip,
                     catFiltroMenuDia === catObj.id && styles.catFiltroChipActive,
-                    { marginRight: 6 }
                   ]}
                   onPress={() => setCatFiltroMenuDia(catObj.id)}
                   activeOpacity={0.8}
@@ -1803,7 +1799,7 @@ export default function AdminHomeScreen() {
                   </Text>
                 </TouchableOpacity>
               ))}
-            </ScrollView>
+            </View>
 
             <View style={styles.searchAndCleanBarRow}>
               <Pressable
@@ -2006,20 +2002,45 @@ export default function AdminHomeScreen() {
               </View>
             </View>
 
-            <View style={styles.catalogoHeaderRow}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catFiltrosScroll}>
-                {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Molletes', 'Extras', 'Otros'].map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.catFiltroChip, catFiltroMenu === cat && styles.catFiltroChipActive]}
-                    onPress={() => setCatFiltroMenu(cat)}
-                  >
-                    <Text style={[styles.catFiltroText, catFiltroMenu === cat && styles.catFiltroTextActive]}>
-                      {cat}
-                    </Text>
+            {/* FILTROS DE CATEGORÍAS DEL CATÁLOGO (TODAS VISIBLES Y ACCESIBLES) */}
+            <View style={styles.catFiltrosWrapContainer}>
+              {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Molletes', 'Extras', 'Otros'].map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[styles.catFiltroChip, catFiltroMenu === cat && styles.catFiltroChipActive]}
+                  onPress={() => setCatFiltroMenu(cat)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={[styles.catFiltroText, catFiltroMenu === cat && styles.catFiltroTextActive]}>
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* BUSCADOR DE ALIMENTOS EN CATÁLOGO Y ACCIONES */}
+            <View style={[styles.searchAndCleanBarRow, { marginBottom: 16, alignItems: 'center' }]}>
+              <Pressable
+                style={[styles.searchBoxInputContainer, searchCatalogoFocused && styles.searchBoxInputContainerFocused, { flex: 1 }]}
+                onPress={() => searchCatalogoRef.current?.focus()}
+              >
+                <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
+                <TextInput
+                  ref={searchCatalogoRef}
+                  style={styles.searchBoxInput}
+                  placeholder={catFiltroMenu === 'Todas' ? 'Buscar alimento por nombre o categoría...' : `Buscar en ${catFiltroMenu}...`}
+                  placeholderTextColor="#94A3B8"
+                  value={busquedaCatalogo}
+                  onChangeText={setBusquedaCatalogo}
+                  onFocus={() => setSearchCatalogoFocused(true)}
+                  onBlur={() => setSearchCatalogoFocused(false)}
+                />
+                {busquedaCatalogo.length > 0 && (
+                  <TouchableOpacity onPress={() => setBusquedaCatalogo('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="close-circle" size={18} color="#64748B" />
                   </TouchableOpacity>
-                ))}
-              </ScrollView>
+                )}
+              </Pressable>
 
               <View style={{ flexDirection: 'row', gap: 8, marginLeft: 8 }}>
                 <TouchableOpacity
@@ -2040,31 +2061,6 @@ export default function AdminHomeScreen() {
                   <Text style={styles.btnNuevoAlimentoSmallText}>+ Nuevo Alimento</Text>
                 </TouchableOpacity>
               </View>
-            </View>
-
-            {/* BUSCADOR DE ALIMENTOS EN CATÁLOGO */}
-            <View style={[styles.searchAndCleanBarRow, { marginBottom: 16 }]}>
-              <Pressable
-                style={[styles.searchBoxInputContainer, searchCatalogoFocused && styles.searchBoxInputContainerFocused]}
-                onPress={() => searchCatalogoRef.current?.focus()}
-              >
-                <Ionicons name="search-outline" size={18} color="#0D9488" style={{ marginRight: 8 }} />
-                <TextInput
-                  ref={searchCatalogoRef}
-                  style={styles.searchBoxInput}
-                  placeholder={catFiltroMenu === 'Todas' ? 'Buscar alimento por nombre o categoría...' : `Buscar en ${catFiltroMenu}...`}
-                  placeholderTextColor="#94A3B8"
-                  value={busquedaCatalogo}
-                  onChangeText={setBusquedaCatalogo}
-                  onFocus={() => setSearchCatalogoFocused(true)}
-                  onBlur={() => setSearchCatalogoFocused(false)}
-                />
-                {busquedaCatalogo.length > 0 && (
-                  <TouchableOpacity onPress={() => setBusquedaCatalogo('')} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                    <Ionicons name="close-circle" size={18} color="#64748B" />
-                  </TouchableOpacity>
-                )}
-              </Pressable>
             </View>
 
             {loadingAlimentos && !refreshing ? (
@@ -5205,6 +5201,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#FFFFFF',
   },
+  catFiltrosWrapContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 14,
+  },
   catFiltrosScroll: {
     flex: 1,
   },
@@ -5215,7 +5218,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#E2E8F0',
-    marginRight: 8,
+    marginBottom: 4,
   },
   catFiltroChipActive: {
     backgroundColor: '#0D9488',
