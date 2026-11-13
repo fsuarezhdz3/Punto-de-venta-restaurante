@@ -135,7 +135,14 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
     const postresItems = activos
       .filter((a) => {
         const t = (a.tipo || '').toLowerCase();
-        return t === 'postre' || t === 'postres';
+        const esPostre = t === 'postre' || t === 'postres';
+        if (!esPostre) return false;
+
+        const aplica =
+          a.aplica_paquete !== undefined && a.aplica_paquete !== null
+            ? Number(a.aplica_paquete) === 1
+            : true;
+        return aplica;
       })
       .map((a) => limpiar(a.nombre));
 
@@ -216,7 +223,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
             : "Bisteck al albañil   $70\nMole de olla   $70\nChile's rellenos en caldillo de jitomate   $70\nChile's rellenos de tres quesos en caldillo de jitomate   $70\nPechugas rellenas en crema de champiñones   $70\nPechugas rellenas en crema de chipotle   $70\nCostillita en salsa tatemada con nopales   $70\nAlbondigas en caldillo de jitomate   $70\nBisteck en chile negro   $70\nMilanesa de pollo con ensalada primavera   $70\nSabana de res con chilaquiles rojos o verdes   $70",
         x: 60,
         y: 565,
-        width: 760,
+        width: 510,
         fontSize: 23,
         colorTitulo: '#9C2744',
         color: '#27272A',
@@ -335,13 +342,19 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           ? saved.texto
           : b.texto;
 
+      // Si el diseño guardado tiene el ancho anterior excesivo (>= 700px) para plato fuerte, corregirlo al ancho óptimo de 510px
+      const widthFinal =
+        b.id === 'platoFuerte' && typeof saved.width === 'number' && saved.width >= 700
+          ? 510
+          : (typeof saved.width === 'number' ? saved.width : b.width);
+
       return {
         ...b,
         titulo: tituloFinal,
         texto: textoFinal,
         x: typeof saved.x === 'number' ? saved.x : b.x,
         y: typeof saved.y === 'number' ? saved.y : b.y,
-        width: typeof saved.width === 'number' ? saved.width : b.width,
+        width: widthFinal,
         fontSize: typeof saved.fontSize === 'number' ? saved.fontSize : b.fontSize,
         colorTitulo: saved.colorTitulo || b.colorTitulo,
         color: saved.color || b.color,
@@ -1194,6 +1207,30 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
                 </TouchableOpacity>
               ))}
             </View>
+          </View>
+
+          {/* ANCHO DEL RECUADRO / DISTANCIA DE PRECIOS */}
+          <Text style={[styles.controlSubLabel, { marginTop: 10 }]}>
+            Ancho del Bloque / Espacio de Precios ({bloqueActual.width || 400}px):
+          </Text>
+          <View style={styles.sizeControlRow}>
+            <TouchableOpacity
+              style={styles.btnStep}
+              onPress={() =>
+                actualizarBloqueSeleccionado('width', Math.max(160, (bloqueActual.width || 400) - 20))
+              }
+            >
+              <Ionicons name="remove" size={18} color="#0F172A" />
+            </TouchableOpacity>
+            <Text style={styles.sizeValueText}>{bloqueActual.width || 400} px</Text>
+            <TouchableOpacity
+              style={styles.btnStep}
+              onPress={() =>
+                actualizarBloqueSeleccionado('width', Math.min(CANVAS_W - (bloqueActual.x || 0), (bloqueActual.width || 400) + 20))
+              }
+            >
+              <Ionicons name="add" size={18} color="#0F172A" />
+            </TouchableOpacity>
           </View>
 
           {/* PALETA DE COLOR */}

@@ -31,6 +31,7 @@ export default function AntojitosView({ onVolverMenu }) {
   const [catAntojitos, setCatAntojitos] = useState([]);
   const [catGuisos, setCatGuisos] = useState([]);
   const [catExtras, setCatExtras] = useState([]);
+  const [precioExtraGuisadoGlobal, setPrecioExtraGuisadoGlobal] = useState(15);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -47,6 +48,16 @@ export default function AntojitosView({ onVolverMenu }) {
       setLoading(true);
       const res = await fetch(`${API_URL}/alimentos`);
       const data = await res.json();
+
+      try {
+        const resConfig = await fetch(`${API_URL}/alimentos/precios-config`);
+        const dataConfig = await resConfig.json();
+        if (resConfig.ok && dataConfig.config?.precio_extra_guisado !== undefined) {
+          setPrecioExtraGuisadoGlobal(Number(dataConfig.config.precio_extra_guisado));
+        }
+      } catch (errConfig) {
+        console.log('Error al consultar precios config en AntojitosView:', errConfig.message);
+      }
 
       if (res.ok && data.alimentos) {
         const bdAntojitos = data.alimentos.filter((a) => a.tipo === 'Antojito');
@@ -81,7 +92,6 @@ export default function AntojitosView({ onVolverMenu }) {
       id: Date.now(),
       numPaquete: paquetes.length + 1,
       antojito: null,
-      modalidad: 'Sencillo', // 'Sencillo' o 'Con Guisado'
       guisado: null,
       extras: [],
       comentarios: '',
@@ -97,20 +107,6 @@ export default function AntojitosView({ onVolverMenu }) {
       numPaquete: idx + 1,
     }));
     setPaquetes(reordenados);
-  };
-
-  // Cambiar modalidad de preparación (Sencillo vs Con Guisado) con los 2 botones
-  const handleCambiarModalidad = (paqueteId, nuevaModalidad) => {
-    setPaquetes((prev) =>
-      prev.map((p) => {
-        if (p.id !== paqueteId) return p;
-        return {
-          ...p,
-          modalidad: nuevaModalidad,
-          guisado: nuevaModalidad === 'Con Guisado' ? p.guisado : null,
-        };
-      })
-    );
   };
 
   // Abrir Bottom Sheet para un campo específico
@@ -181,28 +177,16 @@ export default function AntojitosView({ onVolverMenu }) {
     );
   };
 
-  // Helper para obtener el costo extra por el guisado (priorizando el precio_antojito del guisado)
+  // Helper para obtener el costo extra por el guisado (precio global configurado)
   const obtenerPrecioGuisadoExtra = (p) => {
-    if (p.modalidad !== 'Con Guisado' || !p.guisado) return 0;
-
-    // 1. Si el guisado seleccionado tiene precio_antojito configurado
-    if (p.guisado.precio_antojito !== null && p.guisado.precio_antojito !== undefined && Number(p.guisado.precio_antojito) >= 0) {
-      return Number(p.guisado.precio_antojito);
-    }
-    // 2. Si el antojito seleccionado tiene precio_antojito configurado como respaldo
-    if (p.antojito && p.antojito.precio_antojito !== null && p.antojito.precio_antojito !== undefined && Number(p.antojito.precio_antojito) > 0) {
-      return Number(p.antojito.precio_antojito);
-    }
-    return 0;
+    return p.guisado ? precioExtraGuisadoGlobal : 0;
   };
 
   // Helper para calcular el precio base del antojito (sencillo o con guisado)
   const obtenerPrecioBaseAntojito = (p) => {
     if (!p.antojito) return 0;
-
     const normal = Number(p.antojito.precio || 0);
-    const guisadoExtra = obtenerPrecioGuisadoExtra(p);
-
+    const guisadoExtra = p.guisado ? precioExtraGuisadoGlobal : 0;
     return normal + guisadoExtra;
   };
 
@@ -245,8 +229,8 @@ export default function AntojitosView({ onVolverMenu }) {
           const precioExtras = p.extras.reduce((eSum, e) => eSum + Number(e.precio), 0);
           const costoPaquete = precioBase + precioExtras;
 
-          // Si es sencillo, guardar 'Sencillo'; si es con guisado, guardar el nombre del guisado
-          const guisoFinal = p.modalidad === 'Con Guisado' && p.guisado ? p.guisado.nombre : 'Sencillo';
+          // Si no tiene guisado seleccionado, es 'Sencillo'; si tiene guisado, guardar el nombre del guisado
+          const guisoFinal = p.guisado ? p.guisado.nombre : 'Sencillo';
           const extrasAdicionales = p.extras.map((e) => e.nombre).join(', ');
 
           const meZona = (p.antojito?.zona || 'comal').toLowerCase();
@@ -365,84 +349,28 @@ export default function AntojitosView({ onVolverMenu }) {
                   </TouchableOpacity>
                 </View>
 
-                {/* 2. MODALIDAD PREPARACIÓN (2 BOTONES: SENCILLO O CON GUISADO) */}
+                {/* 2. CAMPO GUISADO (FIJO: SI NO SE SELECCIONA GUISADO ES SENCILLO) */}
                 <View style={styles.fieldRow}>
-                  <Text style={styles.fieldLabel}>Preparación:</Text>
-                  <View style={styles.modalidadSegmentRow}>
-                    <TouchableOpacity
+                  <Text style={styles.fieldLabel}>Guisado:</Text>
+                  <TouchableOpacity
+                    style={[styles.fieldSlot, isActiveField('guisado') && styles.fieldSlotActive]}
+                    onPress={() => abrirBottomSheet(p.id, 'guisado')}
+                    activeOpacity={0.8}
+                  >
+                    <Text
                       style={[
-                        styles.btnSegment,
-                        p.modalidad === 'Sencillo' && styles.btnSegmentActive,
+                        styles.fieldSlotText,
+                        p.guisado && styles.fieldSlotTextSelected,
                       ]}
-                      onPress={() => handleCambiarModalidad(p.id, 'Sencillo')}
-                      activeOpacity={0.8}
+                      numberOfLines={1}
                     >
-                      <Ionicons
-                        name="ellipse"
-                        size={12}
-                        color={p.modalidad === 'Sencillo' ? '#DC2626' : '#94A3B8'}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text
-                        style={[
-                          styles.btnSegmentText,
-                          p.modalidad === 'Sencillo' && styles.btnSegmentTextActive,
-                        ]}
-                      >
-                        Sencillo
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.btnSegment,
-                        p.modalidad === 'Con Guisado' && styles.btnSegmentActive,
-                      ]}
-                      onPress={() => handleCambiarModalidad(p.id, 'Con Guisado')}
-                      activeOpacity={0.8}
-                    >
-                      <Ionicons
-                        name="restaurant"
-                        size={14}
-                        color={p.modalidad === 'Con Guisado' ? '#DC2626' : '#94A3B8'}
-                        style={{ marginRight: 6 }}
-                      />
-                      <Text
-                        style={[
-                          styles.btnSegmentText,
-                          p.modalidad === 'Con Guisado' && styles.btnSegmentTextActive,
-                        ]}
-                      >
-                        Con Guisado
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
+                      {p.guisado
+                        ? `${p.guisado.nombre}${obtenerPrecioGuisadoExtra(p) > 0 ? ` (+$${obtenerPrecioGuisadoExtra(p)})` : ''}`
+                        : 'Sencillo (Sin guisado)'}
+                    </Text>
+                    <Ionicons name="chevron-down" size={16} color="#64748B" />
+                  </TouchableOpacity>
                 </View>
-
-                {/* 3. CAMPO GUISADO (CONDICIONAL: SOLO SI MODALIDAD ES 'CON GUISADO') */}
-                {p.modalidad === 'Con Guisado' && (
-                  <View style={styles.fieldRow}>
-                    <Text style={styles.fieldLabel}>Guisado (Comida):</Text>
-                    <TouchableOpacity
-                      style={[styles.fieldSlot, isActiveField('guisado') && styles.fieldSlotActive]}
-                      onPress={() => abrirBottomSheet(p.id, 'guisado')}
-                      activeOpacity={0.8}
-                    >
-                      <Text
-                        style={[
-                          styles.fieldSlotText,
-                          p.guisado && styles.fieldSlotTextSelected,
-                        ]}
-                        numberOfLines={1}
-                      >
-                        {p.guisado
-                          ? `${p.guisado.nombre}${obtenerPrecioGuisadoExtra(p) > 0 ? ` (+$${obtenerPrecioGuisadoExtra(p)})` : ''}`
-                          : 'Seleccionar Guisado'}
-                      </Text>
-                      <Ionicons name="chevron-down" size={16} color="#64748B" />
-                    </TouchableOpacity>
-                  </View>
-                )}
 
                 {/* 4. CAMPO EXTRAS */}
                 <View style={styles.fieldRow}>
@@ -559,7 +487,9 @@ export default function AntojitosView({ onVolverMenu }) {
                 activeOpacity={0.8}
               >
                 <Ionicons name="trash-outline" size={18} color="#DC2626" style={{ marginRight: 8 }} />
-                <Text style={styles.sheetClearText}>Borrar</Text>
+                <Text style={styles.sheetClearText}>
+                  {activeTarget?.fieldType === 'guisado' ? 'Dejar Sencillo (Sin guisado)' : 'Borrar'}
+                </Text>
               </TouchableOpacity>
 
               {/* ANTOJITOS */}
@@ -578,7 +508,7 @@ export default function AntojitosView({ onVolverMenu }) {
                         {item.nombre}
                       </Text>
                       <Text style={styles.sheetItemPrice}>
-                        ${item.precio}{item.precio_antojito && Number(item.precio_antojito) > 0 ? ` (+${item.precio_antojito} c/guisado)` : ''}
+                        ${item.precio} (+${precioExtraGuisadoGlobal} c/guisado)
                       </Text>
                     </TouchableOpacity>
                   );
@@ -589,9 +519,6 @@ export default function AntojitosView({ onVolverMenu }) {
                 catGuisos.map((item) => {
                   const pActual = paquetes.find((p) => p.id === activeTarget?.paqueteId);
                   const isSelected = pActual?.guisado?.id === item.id;
-                  const precioExtraGuiso = (item.precio_antojito !== null && item.precio_antojito !== undefined && Number(item.precio_antojito) > 0)
-                    ? Number(item.precio_antojito)
-                    : (pActual?.antojito?.precio_antojito && Number(pActual.antojito.precio_antojito) > 0 ? Number(pActual.antojito.precio_antojito) : 0);
 
                   return (
                     <TouchableOpacity
@@ -605,7 +532,7 @@ export default function AntojitosView({ onVolverMenu }) {
                       </Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                         <Text style={styles.sheetItemPrice}>
-                          {precioExtraGuiso > 0 ? `+$${precioExtraGuiso}` : '$0'}
+                          +${precioExtraGuisadoGlobal}
                         </Text>
                         {isSelected && <Ionicons name="checkmark-circle" size={18} color="#10B981" style={{ marginLeft: 8 }} />}
                       </View>

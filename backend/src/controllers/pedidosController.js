@@ -1179,7 +1179,7 @@ const getParaLlevarActivos = async (req, res) => {
               COUNT(ap.id) as itemsCount
        FROM pedidos p
        INNER JOIN alimentos_pedidos ap ON p.num_orden = ap.num_orden
-       WHERE p.num_mesa >= 100 AND ap.estado IN (0, 1, 2, 4)
+       WHERE p.num_mesa >= 100 AND p.estado NOT IN (3, 4) AND ap.estado IN (0, 1, 2)
        GROUP BY p.num_orden, p.num_mesa, p.costo, p.fecha_pedido, p.estado
        ORDER BY p.num_mesa ASC, p.num_orden DESC`
     );
@@ -1209,7 +1209,7 @@ const getSiguienteMesaParaLlevar = async (req, res) => {
       `SELECT DISTINCT p.num_mesa
        FROM pedidos p
        INNER JOIN alimentos_pedidos ap ON p.num_orden = ap.num_orden
-       WHERE p.num_mesa >= 100 AND ap.estado IN (0, 1, 2, 4)`
+       WHERE p.num_mesa >= 100 AND p.estado NOT IN (3, 4) AND ap.estado IN (0, 1, 2)`
     );
 
     const mesasOcupadas = new Set(rows.map((r) => Number(r.num_mesa)));

@@ -33,6 +33,7 @@ export default function ComidaView({ onVolverMenu }) {
   const [catGuarniciones, setCatGuarniciones] = useState([]);
   const [catBebidas, setCatBebidas] = useState([]);
   const [catExtras, setCatExtras] = useState([]);
+  const [precioPaqueteGlobal, setPrecioPaqueteGlobal] = useState(85);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -49,6 +50,16 @@ export default function ComidaView({ onVolverMenu }) {
       setLoading(true);
       const res = await fetch(`${API_URL}/alimentos`);
       const data = await res.json();
+
+      try {
+        const resConfig = await fetch(`${API_URL}/alimentos/precios-config`);
+        const dataConfig = await resConfig.json();
+        if (resConfig.ok && dataConfig.config?.precio_paquete_comida) {
+          setPrecioPaqueteGlobal(Number(dataConfig.config.precio_paquete_comida));
+        }
+      } catch (errConfig) {
+        console.log('Error al consultar precios config en ComidaView:', errConfig.message);
+      }
 
       if (res.ok && data.alimentos) {
         const bdEntradas = data.alimentos.filter((a) => a.tipo === 'Entrada');
@@ -192,48 +203,39 @@ export default function ComidaView({ onVolverMenu }) {
   };
 
   // Helper para determinar si un paquete tiene todo lo requerido y calcular su precio base
-  // (Si está completo, se suman los precio_paquete de cada elemento; si está incompleto, se suman los precios normales).
+  // Si está completo (plato fuerte + entrada + al menos 1 guarnición + bebida) -> precio fijo global
+  // Si está incompleto -> suma de precios individuales de lo elegido, pero con tope al precio paquete fijo
   const obtenerPrecioBasePaquete = (p) => {
     const tieneEntrada = p.entrada !== null;
-    const tieneDosGuarniciones = p.guarnicion1 !== null && p.guarnicion2 !== null;
+    const tieneGuarnicion = p.guarnicion1 !== null || p.guarnicion2 !== null;
     const tieneBebida = p.bebida !== null;
-    const paqueteCompleto = p.platoFuerte !== null && tieneEntrada && tieneDosGuarniciones && tieneBebida;
+    const paqueteCompleto = p.platoFuerte !== null && tieneEntrada && tieneGuarnicion && tieneBebida;
 
-    const getPrecioElemento = (elem) => {
-      if (!elem) return 0;
-      const normal = Number(elem.precio || 0);
-      const pkgPrice = (elem.precio_paquete !== null && elem.precio_paquete !== undefined && Number(elem.precio_paquete) > 0)
-        ? Number(elem.precio_paquete)
-        : normal;
+    const sumaSeparada =
+      (p.entrada ? Number(p.entrada.precio || 0) : 0) +
+      (p.platoFuerte ? Number(p.platoFuerte.precio || 0) : 0) +
+      (p.guarnicion1 ? Number(p.guarnicion1.precio || 0) : 0) +
+      (p.guarnicion2 ? Number(p.guarnicion2.precio || 0) : 0) +
+      (p.bebida ? Number(p.bebida.precio || 0) : 0);
 
-      return paqueteCompleto ? pkgPrice : normal;
-    };
+    if (paqueteCompleto) {
+      return precioPaqueteGlobal;
+    }
 
-    const pEntrada = getPrecioElemento(p.entrada);
-    const pPlato = getPrecioElemento(p.platoFuerte);
-    const pGuarnicion1 = getPrecioElemento(p.guarnicion1);
-    const pGuarnicion2 = getPrecioElemento(p.guarnicion2);
-    const pBebida = getPrecioElemento(p.bebida);
-
-    return pEntrada + pPlato + pGuarnicion1 + pGuarnicion2 + pBebida;
+    return Math.min(sumaSeparada, precioPaqueteGlobal);
   };
 
   const esPrecioPaqueteAplicado = (p) => {
     if (!p.platoFuerte) return false;
     const tieneEntrada = p.entrada !== null;
-    const tieneDosGuarniciones = p.guarnicion1 !== null && p.guarnicion2 !== null;
+    const tieneGuarnicion = p.guarnicion1 !== null || p.guarnicion2 !== null;
     const tieneBebida = p.bebida !== null;
-    return p.platoFuerte !== null && tieneEntrada && tieneDosGuarniciones && tieneBebida;
+    return p.platoFuerte !== null && tieneEntrada && tieneGuarnicion && tieneBebida;
   };
 
   const getPrecioActivoElemento = (elem, p) => {
-    if (!elem) return 0;
-    const normal = Number(elem.precio || 0);
-    const pkgPrice = (elem.precio_paquete !== null && elem.precio_paquete !== undefined && Number(elem.precio_paquete) > 0)
-      ? Number(elem.precio_paquete)
-      : normal;
-
-    return esPrecioPaqueteAplicado(p) ? pkgPrice : normal;
+    if (!elem) return '';
+    return esPrecioPaqueteAplicado(p) ? 'Incluido' : `$${elem.precio || 0}`;
   };
 
   // Calcular total de la comanda (Precio Base + Extras)
@@ -404,7 +406,7 @@ export default function ComidaView({ onVolverMenu }) {
                       ]}
                       numberOfLines={1}
                     >
-                      {p.entrada ? `${p.entrada.nombre} ($${getPrecioActivoElemento(p.entrada, p)})` : 'Seleccionar Entrada'}
+                      {p.entrada ? `${p.entrada.nombre} (${getPrecioActivoElemento(p.entrada, p)})` : 'Seleccionar Entrada'}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#64748B" />
                   </TouchableOpacity>
@@ -425,7 +427,7 @@ export default function ComidaView({ onVolverMenu }) {
                       ]}
                       numberOfLines={1}
                     >
-                      {p.platoFuerte ? `${p.platoFuerte.nombre} ($${getPrecioActivoElemento(p.platoFuerte, p)})` : 'Seleccionar Plato Fuerte'}
+                      {p.platoFuerte ? `${p.platoFuerte.nombre} (${getPrecioActivoElemento(p.platoFuerte, p)})` : 'Seleccionar Plato Fuerte'}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#64748B" />
                   </TouchableOpacity>
@@ -446,7 +448,7 @@ export default function ComidaView({ onVolverMenu }) {
                         numberOfLines={1}
                       >
                         {p.guarnicion1
-                          ? `1. ${p.guarnicion1.nombre} ($${getPrecioActivoElemento(p.guarnicion1, p)})`
+                          ? `1. ${p.guarnicion1.nombre} (${getPrecioActivoElemento(p.guarnicion1, p)})`
                           : 'Seleccionar Guarnición 1'}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color="#64748B" />
@@ -463,7 +465,7 @@ export default function ComidaView({ onVolverMenu }) {
                         numberOfLines={1}
                       >
                         {p.guarnicion2
-                          ? `2. ${p.guarnicion2.nombre} ($${getPrecioActivoElemento(p.guarnicion2, p)})`
+                          ? `2. ${p.guarnicion2.nombre} (${getPrecioActivoElemento(p.guarnicion2, p)})`
                           : 'Seleccionar Guarnición 2'}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color="#64748B" />
@@ -483,7 +485,7 @@ export default function ComidaView({ onVolverMenu }) {
                       style={[styles.fieldSlotText, p.bebida && styles.fieldSlotTextSelected]}
                       numberOfLines={1}
                     >
-                      {p.bebida ? `${p.bebida.nombre} ($${getPrecioActivoElemento(p.bebida, p)})` : 'Seleccionar Bebida'}
+                      {p.bebida ? `${p.bebida.nombre} (${getPrecioActivoElemento(p.bebida, p)})` : 'Seleccionar Bebida'}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#64748B" />
                   </TouchableOpacity>

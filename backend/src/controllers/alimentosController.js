@@ -92,15 +92,13 @@ const crearAlimento = async (req, res) => {
         : null);
 
   try {
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_paquete DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_antojito DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN categorias_extra VARCHAR(255) NULL DEFAULT NULL'); } catch (e) {}
 
     const [result] = await db.query(
-      'INSERT INTO alimentos (nombre, tipo, precio, precio_paquete, precio_antojito, zona, estado, aplica_paquete, aplica_paquete_antojito, categorias_extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal]
+      'INSERT INTO alimentos (nombre, tipo, precio, zona, estado, aplica_paquete, aplica_paquete_antojito, categorias_extra) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [nombre.trim(), tipo.trim(), Number(precio), zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal]
     );
 
     return res.json({
@@ -110,8 +108,6 @@ const crearAlimento = async (req, res) => {
         nombre: nombre.trim(),
         tipo: tipo.trim(),
         precio: Number(precio),
-        precio_paquete: precioPaqueteVal,
-        precio_antojito: precioAntojitoVal,
         zona: zonaValida,
         estado: estadoValido,
         aplica_paquete: aplicaPaqueteVal,
@@ -164,15 +160,13 @@ const actualizarAlimento = async (req, res) => {
         : null);
 
   try {
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_paquete DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_antojito DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos ADD COLUMN categorias_extra VARCHAR(255) NULL DEFAULT NULL'); } catch (e) {}
 
     await db.query(
-      'UPDATE alimentos SET nombre = ?, tipo = ?, precio = ?, precio_paquete = ?, precio_antojito = ?, zona = ?, estado = ?, aplica_paquete = ?, aplica_paquete_antojito = ?, categorias_extra = ? WHERE id = ?',
-      [nombre.trim(), tipo.trim(), Number(precio), precioPaqueteVal, precioAntojitoVal, zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal, id]
+      'UPDATE alimentos SET nombre = ?, tipo = ?, precio = ?, zona = ?, estado = ?, aplica_paquete = ?, aplica_paquete_antojito = ?, categorias_extra = ? WHERE id = ?',
+      [nombre.trim(), tipo.trim(), Number(precio), zonaValida, estadoValido, aplicaPaqueteVal, aplicaPaqueteAntojitoVal, categoriasExtraVal, id]
     );
 
     return res.json({
@@ -183,8 +177,6 @@ const actualizarAlimento = async (req, res) => {
         nombre: nombre.trim(),
         tipo: tipo.trim(),
         precio: Number(precio),
-        precio_paquete: precioPaqueteVal,
-        precio_antojito: precioAntojitoVal,
         zona: zonaValida,
         estado: estadoValido,
         aplica_paquete: aplicaPaqueteVal,
@@ -251,25 +243,12 @@ const actualizarPreciosMasivo = async (req, res) => {
   }
 
   try {
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_paquete DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
-    try { await db.query('ALTER TABLE alimentos ADD COLUMN precio_antojito DECIMAL(10,2) NULL DEFAULT NULL'); } catch (e) {}
-
     const updates = [];
     const params = [];
 
     if (modificar_precio) {
       updates.push('precio = ?');
       params.push(nuevo_precio !== null && nuevo_precio !== '' ? Number(nuevo_precio) : 0);
-    }
-
-    if (modificar_precio_paquete) {
-      updates.push('precio_paquete = ?');
-      params.push(nuevo_precio_paquete !== null && nuevo_precio_paquete !== '' ? Number(nuevo_precio_paquete) : null);
-    }
-
-    if (modificar_precio_antojito) {
-      updates.push('precio_antojito = ?');
-      params.push(nuevo_precio_antojito !== null && nuevo_precio_antojito !== '' ? Number(nuevo_precio_antojito) : null);
     }
 
     if (modificar_estado) {
@@ -422,6 +401,97 @@ const guardarMenuDiseno = async (req, res) => {
   }
 };
 
+// Asegurar que la tabla configuracion_precios existe en MySQL
+const asegurarTablaPreciosConfig = async () => {
+  try {
+    await db.query(`
+      CREATE TABLE IF NOT EXISTS configuracion_precios (
+        id INT PRIMARY KEY DEFAULT 1,
+        precio_paquete_comida DECIMAL(10,2) NOT NULL DEFAULT 85.00,
+        precio_paquete_desayuno DECIMAL(10,2) NOT NULL DEFAULT 85.00,
+        precio_extra_guisado DECIMAL(10,2) NOT NULL DEFAULT 15.00,
+        fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+    const [rows] = await db.query('SELECT id FROM configuracion_precios WHERE id = 1');
+    if (rows.length === 0) {
+      await db.query(`
+        INSERT INTO configuracion_precios (id, precio_paquete_comida, precio_paquete_desayuno, precio_extra_guisado)
+        VALUES (1, 85.00, 85.00, 15.00)
+      `);
+    }
+  } catch (err) {
+    console.warn('Error al verificar/crear tabla configuracion_precios:', err.message);
+  }
+};
+
+// GET /api/alimentos/precios-config
+const getPreciosConfig = async (req, res) => {
+  try {
+    await asegurarTablaPreciosConfig();
+    const [rows] = await db.query('SELECT precio_paquete_comida, precio_paquete_desayuno, precio_extra_guisado FROM configuracion_precios WHERE id = 1');
+    if (rows.length > 0) {
+      return res.json({
+        ok: true,
+        config: {
+          precio_paquete_comida: Number(rows[0].precio_paquete_comida),
+          precio_paquete_desayuno: Number(rows[0].precio_paquete_desayuno),
+          precio_extra_guisado: Number(rows[0].precio_extra_guisado),
+        },
+      });
+    }
+    return res.json({
+      ok: true,
+      config: {
+        precio_paquete_comida: 85,
+        precio_paquete_desayuno: 85,
+        precio_extra_guisado: 15,
+      },
+    });
+  } catch (error) {
+    console.error('Error al obtener configuracion de precios:', error);
+    return res.status(500).json({ error: 'Error al consultar la configuración de precios' });
+  }
+};
+
+// PUT /api/alimentos/precios-config
+const actualizarPreciosConfig = async (req, res) => {
+  const { precio_paquete_comida, precio_paquete_desayuno, precio_extra_guisado } = req.body;
+
+  const pComida = Number(precio_paquete_comida);
+  const pDesayuno = Number(precio_paquete_desayuno);
+  const pGuisado = Number(precio_extra_guisado);
+
+  if (isNaN(pComida) || pComida < 0 || isNaN(pDesayuno) || pDesayuno < 0 || isNaN(pGuisado) || pGuisado < 0) {
+    return res.status(400).json({ error: 'Todos los precios deben ser números válidos mayores o iguales a 0' });
+  }
+
+  try {
+    await asegurarTablaPreciosConfig();
+    await db.query(`
+      INSERT INTO configuracion_precios (id, precio_paquete_comida, precio_paquete_desayuno, precio_extra_guisado)
+      VALUES (1, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE
+        precio_paquete_comida = VALUES(precio_paquete_comida),
+        precio_paquete_desayuno = VALUES(precio_paquete_desayuno),
+        precio_extra_guisado = VALUES(precio_extra_guisado)
+    `, [pComida, pDesayuno, pGuisado]);
+
+    return res.json({
+      ok: true,
+      mensaje: 'Precios de paquetes y guisado actualizados correctamente',
+      config: {
+        precio_paquete_comida: pComida,
+        precio_paquete_desayuno: pDesayuno,
+        precio_extra_guisado: pGuisado,
+      },
+    });
+  } catch (error) {
+    console.error('Error al actualizar precios config:', error);
+    return res.status(500).json({ error: 'Error al guardar la configuración de precios' });
+  }
+};
+
 module.exports = {
   getAlimentos,
   getAlimentosPorCategoria,
@@ -432,4 +502,6 @@ module.exports = {
   actualizarPreciosMasivo,
   getMenuDiseno,
   guardarMenuDiseno,
+  getPreciosConfig,
+  actualizarPreciosConfig,
 };

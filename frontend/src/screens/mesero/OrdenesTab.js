@@ -103,6 +103,11 @@ export default function OrdenesTab() {
   const [catExtras, setCatExtras] = useState([]);
 
   const [alimentosBD, setAlimentosBD] = useState([]);
+  const [preciosConfig, setPreciosConfig] = useState({
+    precio_paquete_comida: 85,
+    precio_paquete_desayuno: 85,
+    precio_extra_guisado: 15,
+  });
 
   // Cargar catálogo completo desde la BD al montar el componente
   useEffect(() => {
@@ -111,6 +116,20 @@ export default function OrdenesTab() {
 
   const cargarCatalogosBD = async () => {
     try {
+      try {
+        const resConfig = await fetch(`${API_URL}/alimentos/precios-config`);
+        const dataConfig = await resConfig.json();
+        if (resConfig.ok && dataConfig.config) {
+          setPreciosConfig({
+            precio_paquete_comida: Number(dataConfig.config.precio_paquete_comida || 85),
+            precio_paquete_desayuno: Number(dataConfig.config.precio_paquete_desayuno || 85),
+            precio_extra_guisado: Number(dataConfig.config.precio_extra_guisado || 15),
+          });
+        }
+      } catch (errConfig) {
+        console.log('Error al consultar precios config en OrdenesTab:', errConfig.message);
+      }
+
       const res = await fetch(`${API_URL}/alimentos`);
       const data = await res.json();
       if (res.ok && data.alimentos) {
@@ -238,9 +257,9 @@ export default function OrdenesTab() {
     if (cat === 'comida') {
       const tienePlato = !!form.alimento;
       const tieneEntrada = !!form.entrada;
-      const tieneDosGuarniciones = !!form.guarnicion1 && !!form.guarnicion2;
+      const tieneGuarnicion = !!form.guarnicion1 || !!form.guarnicion2;
       const tieneBebida = !!form.bebida;
-      return tienePlato && tieneEntrada && tieneDosGuarniciones && tieneBebida;
+      return tienePlato && tieneEntrada && tieneGuarnicion && tieneBebida;
     }
     if (cat === 'desayunos') {
       const tieneDesayuno = !!form.alimento;
@@ -255,34 +274,17 @@ export default function OrdenesTab() {
   const calcularCostoPaqueteEdicion = (cat, form, listaCat = alimentosBD) => {
     const esCompleto = esPaqueteCompletoEdicion(cat, form);
 
-    const getPrecioElem = (nombreStr, tipoFallback) => {
+    const getPrecioElem = (nombreStr) => {
       if (!nombreStr) return 0;
       const obj = buscarAlimentoCatalog(nombreStr, listaCat);
-      if (obj) {
-        const normal = Number(obj.precio || 0);
-        const pkgPrice = (obj.precio_paquete !== null && obj.precio_paquete !== undefined && Number(obj.precio_paquete) > 0)
-          ? Number(obj.precio_paquete)
-          : normal;
-
-        return esCompleto ? pkgPrice : normal;
-      }
-
-      // Precios de respaldo si el ítem aún no está cargado en el estado local
-      let defaultNormal = 30;
-      let defaultPkg = 15;
-      if (tipoFallback === 'plato') { defaultNormal = 110; defaultPkg = 65; }
-      else if (tipoFallback === 'entrada') { defaultNormal = 35; defaultPkg = 15; }
-      else if (tipoFallback === 'guarnicion') { defaultNormal = 30; defaultPkg = 10; }
-      else if (tipoFallback === 'bebida') { defaultNormal = 30; defaultPkg = 15; }
-
-      return esCompleto ? defaultPkg : defaultNormal;
+      return obj ? Number(obj.precio || 0) : 0;
     };
 
-    const pAlimento = getPrecioElem(form.alimento, 'plato');
-    const pEntrada = getPrecioElem(form.entrada, 'entrada');
-    const pGuarnicion1 = getPrecioElem(form.guarnicion1, 'guarnicion');
-    const pGuarnicion2 = getPrecioElem(form.guarnicion2, 'guarnicion');
-    const pBebida = getPrecioElem(form.bebida, 'bebida');
+    const pAlimento = getPrecioElem(form.alimento);
+    const pEntrada = getPrecioElem(form.entrada);
+    const pGuarnicion1 = getPrecioElem(form.guarnicion1);
+    const pGuarnicion2 = getPrecioElem(form.guarnicion2);
+    const pBebida = getPrecioElem(form.bebida);
 
     // Extras
     const arrayExtras = form.extras ? form.extras.split(', ').filter(Boolean) : [];
@@ -291,25 +293,27 @@ export default function OrdenesTab() {
       return sum + Number(objExtra?.precio || 20);
     }, 0);
 
+    if (cat === 'comida') {
+      const sumaSeparada = pAlimento + pEntrada + pGuarnicion1 + pGuarnicion2 + pBebida;
+      const precioPaquete = Number(preciosConfig.precio_paquete_comida || 85);
+      const costoBase = esCompleto ? precioPaquete : Math.min(sumaSeparada, precioPaquete);
+      return costoBase + pExtras;
+    }
+
+    if (cat === 'desayunos') {
+      const sumaSeparada = pAlimento + pGuarnicion1 + pGuarnicion2 + pBebida;
+      const precioPaquete = Number(preciosConfig.precio_paquete_desayuno || 85);
+      const costoBase = esCompleto ? precioPaquete : Math.min(sumaSeparada, precioPaquete);
+      return costoBase + pExtras;
+    }
+
     // Guisado extra en Antojitos
     let pGuisoExtra = 0;
     if (cat === 'antojitos' && form.guiso && form.guiso !== 'Sencillo') {
-      const objGuiso = buscarAlimentoCatalog(form.guiso, listaCat);
-      const objAntojito = buscarAlimentoCatalog(form.alimento, listaCat);
-      if (objGuiso?.precio_antojito !== null && objGuiso?.precio_antojito !== undefined && Number(objGuiso?.precio_antojito) >= 0) {
-        pGuisoExtra = Number(objGuiso.precio_antojito);
-      } else if (objAntojito?.precio_antojito !== null && objAntojito?.precio_antojito !== undefined && Number(objAntojito?.precio_antojito) > 0) {
-        pGuisoExtra = Number(objAntojito.precio_antojito);
-      } else {
-        pGuisoExtra = 15;
-      }
+      pGuisoExtra = Number(preciosConfig.precio_extra_guisado || 15);
     }
 
-    if (cat === 'comida' || cat === 'desayunos') {
-      return pAlimento + pEntrada + pGuarnicion1 + pGuarnicion2 + pBebida + pExtras;
-    } else {
-      return pAlimento + pGuisoExtra + pBebida + pExtras;
-    }
+    return pAlimento + pGuisoExtra + pBebida + pExtras;
   };
 
   const abrirPicker = (field, title, options) => {

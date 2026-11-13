@@ -32,6 +32,7 @@ export default function DesayunosView({ onVolverMenu }) {
   const [catGuarniciones, setCatGuarniciones] = useState([]);
   const [catBebidas, setCatBebidas] = useState([]);
   const [catExtras, setCatExtras] = useState([]);
+  const [precioPaqueteGlobal, setPrecioPaqueteGlobal] = useState(85);
 
   // Estado para el Bottom Sheet desplegable desde abajo
   const [bottomSheetVisible, setBottomSheetVisible] = useState(false);
@@ -47,6 +48,16 @@ export default function DesayunosView({ onVolverMenu }) {
       setLoading(true);
       const res = await fetch(`${API_URL}/alimentos`);
       const data = await res.json();
+
+      try {
+        const resConfig = await fetch(`${API_URL}/alimentos/precios-config`);
+        const dataConfig = await resConfig.json();
+        if (resConfig.ok && dataConfig.config?.precio_paquete_desayuno) {
+          setPrecioPaqueteGlobal(Number(dataConfig.config.precio_paquete_desayuno));
+        }
+      } catch (errConfig) {
+        console.log('Error al consultar precios config en DesayunosView:', errConfig.message);
+      }
 
       if (res.ok && data.alimentos) {
         const bdDesayunos = data.alimentos.filter((a) => a.tipo === 'Desayuno');
@@ -181,30 +192,24 @@ export default function DesayunosView({ onVolverMenu }) {
   };
 
   // Helper para determinar si un paquete tiene todo lo requerido y calcular su precio base
-  // (Si está completo, se suman los precio_paquete de cada elemento; si está incompleto, se suman los precios normales).
+  // Si está completo (desayuno + al menos 1 guarnición + bebida) -> precio fijo global
+  // Si está incompleto -> suma de precios individuales de lo elegido, pero con tope al precio paquete fijo
   const obtenerPrecioBasePaquete = (p) => {
-    // Verificar si se seleccionó absolutamente todo lo del paquete (desayuno, guarnición(es) y bebida)
     const tieneGuarnicion = p.guarnicion1 !== null || p.guarnicion2 !== null;
     const tieneBebida = p.bebida !== null;
     const paqueteCompleto = p.desayuno !== null && tieneGuarnicion && tieneBebida;
 
-    // Helper para obtener el precio de un elemento según si aplica tarifa de paquete o precio normal
-    const getPrecioElemento = (elem) => {
-      if (!elem) return 0;
-      const normal = Number(elem.precio || 0);
-      const pkgPrice = (elem.precio_paquete !== null && elem.precio_paquete !== undefined && Number(elem.precio_paquete) > 0)
-        ? Number(elem.precio_paquete)
-        : normal;
+    const sumaSeparada =
+      (p.desayuno ? Number(p.desayuno.precio || 0) : 0) +
+      (p.guarnicion1 ? Number(p.guarnicion1.precio || 0) : 0) +
+      (p.guarnicion2 ? Number(p.guarnicion2.precio || 0) : 0) +
+      (p.bebida ? Number(p.bebida.precio || 0) : 0);
 
-      return paqueteCompleto ? pkgPrice : normal;
-    };
+    if (paqueteCompleto) {
+      return precioPaqueteGlobal;
+    }
 
-    const pDesayuno = getPrecioElemento(p.desayuno);
-    const pGuarnicion1 = getPrecioElemento(p.guarnicion1);
-    const pGuarnicion2 = getPrecioElemento(p.guarnicion2);
-    const pBebida = getPrecioElemento(p.bebida);
-
-    return pDesayuno + pGuarnicion1 + pGuarnicion2 + pBebida;
+    return Math.min(sumaSeparada, precioPaqueteGlobal);
   };
 
   const esPrecioPaqueteAplicado = (p) => {
@@ -215,13 +220,8 @@ export default function DesayunosView({ onVolverMenu }) {
   };
 
   const getPrecioActivoElemento = (elem, p) => {
-    if (!elem) return 0;
-    const normal = Number(elem.precio || 0);
-    const pkgPrice = (elem.precio_paquete !== null && elem.precio_paquete !== undefined && Number(elem.precio_paquete) > 0)
-      ? Number(elem.precio_paquete)
-      : normal;
-
-    return esPrecioPaqueteAplicado(p) ? pkgPrice : normal;
+    if (!elem) return '';
+    return esPrecioPaqueteAplicado(p) ? 'Incluido' : `$${elem.precio || 0}`;
   };
 
   // Calcular total de la comanda (Precio Base + Extras)
@@ -381,7 +381,7 @@ export default function DesayunosView({ onVolverMenu }) {
                       ]}
                       numberOfLines={1}
                     >
-                      {p.desayuno ? `${p.desayuno.nombre} ($${getPrecioActivoElemento(p.desayuno, p)})` : 'Seleccionar Desayuno'}
+                      {p.desayuno ? `${p.desayuno.nombre} (${getPrecioActivoElemento(p.desayuno, p)})` : 'Seleccionar Desayuno'}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#64748B" />
                   </TouchableOpacity>
@@ -402,7 +402,7 @@ export default function DesayunosView({ onVolverMenu }) {
                         numberOfLines={1}
                       >
                         {p.guarnicion1
-                          ? `1. ${p.guarnicion1.nombre} ($${getPrecioActivoElemento(p.guarnicion1, p)})`
+                          ? `1. ${p.guarnicion1.nombre} (${getPrecioActivoElemento(p.guarnicion1, p)})`
                           : 'Seleccionar Guarnición 1'}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color="#64748B" />
@@ -419,7 +419,7 @@ export default function DesayunosView({ onVolverMenu }) {
                         numberOfLines={1}
                       >
                         {p.guarnicion2
-                          ? `2. ${p.guarnicion2.nombre} ($${getPrecioActivoElemento(p.guarnicion2, p)})`
+                          ? `2. ${p.guarnicion2.nombre} (${getPrecioActivoElemento(p.guarnicion2, p)})`
                           : 'Seleccionar Guarnición 2'}
                       </Text>
                       <Ionicons name="chevron-down" size={16} color="#64748B" />
@@ -439,7 +439,7 @@ export default function DesayunosView({ onVolverMenu }) {
                       style={[styles.fieldSlotText, p.bebida && styles.fieldSlotTextSelected]}
                       numberOfLines={1}
                     >
-                      {p.bebida ? `${p.bebida.nombre} ($${getPrecioActivoElemento(p.bebida, p)})` : 'Seleccionar Bebida'}
+                      {p.bebida ? `${p.bebida.nombre} (${getPrecioActivoElemento(p.bebida, p)})` : 'Seleccionar Bebida'}
                     </Text>
                     <Ionicons name="chevron-down" size={16} color="#64748B" />
                   </TouchableOpacity>

@@ -124,30 +124,60 @@ export default function AdminHomeScreen() {
   const [catFiltroMenu, setCatFiltroMenu] = useState('Todas'); // 'Todas' | 'Comida' | 'Desayuno' | 'Antojito' | 'Bebida' | 'Entrada'
   const [catFiltroMenuDia, setCatFiltroMenuDia] = useState('Todas'); // 'Todas' | 'Desayunos' | 'Comida' | 'Entradas' | 'Aguas' | 'Guarniciones' | 'Postres'
 
-  // Helper para verificar si un tipo pertenece al menú del día configurable
-  const esTipoMenuDia = (tipoStr = '') => {
+  // Helper para verificar si un alimento o tipo pertenece al menú del día configurable
+  const esTipoMenuDia = (itemOrTipo = '', optionalItem = null) => {
+    const item = typeof itemOrTipo === 'object' && itemOrTipo !== null ? itemOrTipo : optionalItem;
+    const tipoStr = typeof itemOrTipo === 'string' ? itemOrTipo : (item ? item.tipo : '');
     const t = (tipoStr || '').toLowerCase();
-    return (
+    const esValido = (
       t === 'comida' || t === 'comidas' ||
       t === 'desayuno' || t === 'desayunos' ||
       t === 'entrada' || t === 'entradas' ||
-      t === 'bebida' || t === 'bebidas' || t === 'litro' || t === 'litros' ||
+      t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' || t === 'litro' || t === 'litros' ||
       t === 'guarnicion' || t === 'guarniciones' ||
       t === 'postre' || t === 'postres'
     );
+    if (!esValido) return false;
+
+    // Para bebidas y postres, SOLO deben mostrarse los que aplican a paquete
+    if (item) {
+      const esBebidaOPostre =
+        t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' ||
+        t === 'litro' || t === 'litros' || t === 'postre' || t === 'postres';
+      if (esBebidaOPostre) {
+        const aplica = item.aplica_paquete !== undefined && item.aplica_paquete !== null
+          ? Number(item.aplica_paquete) === 1
+          : true;
+        if (!aplica) return false;
+      }
+    }
+
+    return true;
   };
 
   // Helper para filtrar alimentos por categoría dentro del Menú del Día
   const perteneceACategoriaMenuDia = (item, cat) => {
+    if (!item) return false;
+    const t = (item.tipo || '').toLowerCase();
+    const esBebida = t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' || t === 'litro' || t === 'litros';
+    const esPostre = t === 'postre' || t === 'postres';
+
+    // En bebidas y postres del Menú del Día, SOLO deben mostrarse los que aplican a paquete
+    if (esBebida || esPostre) {
+      const aplica = item.aplica_paquete !== undefined && item.aplica_paquete !== null
+        ? Number(item.aplica_paquete) === 1
+        : true;
+      if (!aplica) return false;
+    }
+
     if (!cat || cat === 'Todas') return true;
     const catLower = cat.toLowerCase();
-    const t = (item.tipo || '').toLowerCase();
     if (catLower === 'desayunos' || catLower === 'desayuno') return t === 'desayuno' || t === 'desayunos';
     if (catLower === 'comida' || catLower === 'comidas') return t === 'comida' || t === 'comidas';
     if (catLower === 'entradas' || catLower === 'entrada') return t === 'entrada' || t === 'entradas';
-    if (catLower === 'aguas' || catLower === 'bebidas' || catLower === 'bebida') return t === 'bebida' || t === 'bebidas' || t === 'litro' || t === 'litros';
+    if (catLower === 'aguas' || catLower === 'bebidas' || catLower === 'bebida') return esBebida;
     if (catLower === 'guarniciones' || catLower === 'guarnicion') return t === 'guarnicion' || t === 'guarniciones';
-    if (catLower === 'postres' || catLower === 'postre') return t === 'postre' || t === 'postres';
+    if (catLower === 'postres' || catLower === 'postre') return esPostre;
     return true;
   };
 
@@ -166,8 +196,10 @@ export default function AdminHomeScreen() {
   const [formNombre, setFormNombre] = useState('');
   const [formTipo, setFormTipo] = useState('Comida');
   const [formPrecio, setFormPrecio] = useState('');
-  const [formPrecioPaquete, setFormPrecioPaquete] = useState('');
-  const [formPrecioAntojito, setFormPrecioAntojito] = useState('');
+  const [configPrecioComida, setConfigPrecioComida] = useState('85');
+  const [configPrecioDesayuno, setConfigPrecioDesayuno] = useState('85');
+  const [configPrecioGuisado, setConfigPrecioGuisado] = useState('15');
+  const [guardandoPrecios, setGuardandoPrecios] = useState(false);
   const [formZona, setFormZona] = useState('cocina');
   const [formEstado, setFormEstado] = useState(true);
   const [formAplicaPaquete, setFormAplicaPaquete] = useState(true);
@@ -181,17 +213,14 @@ export default function AdminHomeScreen() {
   const [selectedIdsMasivo, setSelectedIdsMasivo] = useState({});
   const [modificarPrecioRegular, setModificarPrecioRegular] = useState(false);
   const [nuevoPrecioRegular, setNuevoPrecioRegular] = useState('');
-  const [modificarPrecioPaquete, setModificarPrecioPaquete] = useState(false);
-  const [nuevoPrecioPaquete, setNuevoPrecioPaquete] = useState('');
-  const [modificarPrecioAntojito, setModificarPrecioAntojito] = useState(false);
-  const [nuevoPrecioAntojito, setNuevoPrecioAntojito] = useState('');
   const [modificarEstadoMasivo, setModificarEstadoMasivo] = useState(false);
   const [nuevoEstadoMasivo, setNuevoEstadoMasivo] = useState(1);
 
-  // Cargar comanda global, catálogo y corte de caja periódicamente
+  // Cargar comanda global, catálogo, precios globales y corte de caja periódicamente
   useEffect(() => {
     cargarTodasLasOrdenes(todosLosPedidos.length === 0);
     cargarCatalogoAlimentos();
+    cargarPreciosConfig();
     cargarCorteActivo();
 
     const timer = setInterval(() => {
@@ -206,7 +235,7 @@ export default function AdminHomeScreen() {
     if (alimentosCat.length > 0) {
       const initialMap = {};
       alimentosCat
-        .filter((a) => esTipoMenuDia(a.tipo))
+        .filter((a) => esTipoMenuDia(a))
         .forEach((c) => {
           if (Number(c.estado) === 1) {
             initialMap[c.id] = true;
@@ -249,6 +278,54 @@ export default function AdminHomeScreen() {
     }
   };
 
+  const cargarPreciosConfig = async () => {
+    try {
+      const res = await fetch(`${API_URL}/alimentos/precios-config`);
+      const data = await res.json();
+      if (res.ok && data.config) {
+        setConfigPrecioComida(String(data.config.precio_paquete_comida ?? '85'));
+        setConfigPrecioDesayuno(String(data.config.precio_paquete_desayuno ?? '85'));
+        setConfigPrecioGuisado(String(data.config.precio_extra_guisado ?? '15'));
+      }
+    } catch (e) {
+      console.log('Error al cargar precios config:', e.message);
+    }
+  };
+
+  const handleGuardarPreciosGlobales = async () => {
+    const pComida = Number(configPrecioComida);
+    const pDesayuno = Number(configPrecioDesayuno);
+    const pGuisado = Number(configPrecioGuisado);
+
+    if (isNaN(pComida) || pComida < 0 || isNaN(pDesayuno) || pDesayuno < 0 || isNaN(pGuisado) || pGuisado < 0) {
+      Alert.alert('Precios Inválidos', 'Todos los precios deben ser valores numéricos válidos (≥ 0).');
+      return;
+    }
+
+    try {
+      setGuardandoPrecios(true);
+      const res = await fetch(`${API_URL}/alimentos/precios-config`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          precio_paquete_comida: pComida,
+          precio_paquete_desayuno: pDesayuno,
+          precio_extra_guisado: pGuisado,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && data.ok) {
+        Alert.alert('✅ Precios Guardados', 'Los precios de paquetes y guisado se actualizaron correctamente.');
+      } else {
+        Alert.alert('Error', data.error || 'No se pudieron actualizar los precios.');
+      }
+    } catch (e) {
+      Alert.alert('Error de conexión', e.message);
+    } finally {
+      setGuardandoPrecios(false);
+    }
+  };
+
   const cargarCorteActivo = async () => {
     try {
       const res = await fetch(`${API_URL}/cortes/activo/${user?.id || 1}`);
@@ -267,6 +344,7 @@ export default function AdminHomeScreen() {
     setRefreshing(true);
     cargarTodasLasOrdenes(false);
     cargarCatalogoAlimentos();
+    cargarPreciosConfig();
     cargarCorteActivo();
   };
 
@@ -786,8 +864,6 @@ export default function AdminHomeScreen() {
     setFormNombre('');
     setFormTipo('Comida');
     setFormPrecio('');
-    setFormPrecioPaquete('');
-    setFormPrecioAntojito('');
     setFormZona('cocina');
     setFormEstado(true);
     setFormAplicaPaquete(true);
@@ -802,8 +878,6 @@ export default function AdminHomeScreen() {
     setFormNombre(item.nombre || '');
     setFormTipo(item.tipo || 'Comida');
     setFormPrecio(String(item.precio || ''));
-    setFormPrecioPaquete(item.precio_paquete !== null && item.precio_paquete !== undefined ? String(item.precio_paquete) : '');
-    setFormPrecioAntojito(item.precio_antojito !== null && item.precio_antojito !== undefined ? String(item.precio_antojito) : '');
     setFormZona(item.zona || 'cocina');
     setFormEstado(Number(item.estado) === 1);
     setFormAplicaPaquete(item.aplica_paquete !== undefined && item.aplica_paquete !== null ? Number(item.aplica_paquete) === 1 : true);
@@ -844,8 +918,8 @@ export default function AdminHomeScreen() {
       nombre: formNombre.trim(),
       tipo: formTipo,
       precio: Number(formPrecio),
-      precio_paquete: formPrecioPaquete.trim() !== '' ? Number(formPrecioPaquete) : null,
-      precio_antojito: formPrecioAntojito.trim() !== '' ? Number(formPrecioAntojito) : null,
+      precio_paquete: null,
+      precio_antojito: null,
       zona: formZona,
       estado: formEstado ? 1 : 0,
       aplica_paquete: formAplicaPaquete ? 1 : 0,
@@ -891,8 +965,8 @@ export default function AdminHomeScreen() {
       nombre: item.nombre,
       tipo: item.tipo,
       precio: item.precio,
-      precio_paquete: item.precio_paquete,
-      precio_antojito: item.precio_antojito,
+      precio_paquete: null,
+      precio_antojito: null,
       zona: item.zona,
       estado: nuevoEstado,
     };
@@ -943,10 +1017,6 @@ export default function AdminHomeScreen() {
     setSelectedIdsMasivo(initialSelected);
     setModificarPrecioRegular(false);
     setNuevoPrecioRegular('');
-    setModificarPrecioPaquete(false);
-    setNuevoPrecioPaquete('');
-    setModificarPrecioAntojito(false);
-    setNuevoPrecioAntojito('');
     setModificarEstadoMasivo(false);
     setNuevoEstadoMasivo(1);
     setModalMasivoVisible(true);
@@ -979,7 +1049,7 @@ export default function AdminHomeScreen() {
       return;
     }
 
-    if (!modificarPrecioRegular && !modificarPrecioPaquete && !modificarPrecioAntojito && !modificarEstadoMasivo) {
+    if (!modificarPrecioRegular && !modificarEstadoMasivo) {
       Alert.alert('Atención', 'Debes activar al menos una casilla (Precio o Estado) a modificar.');
       return;
     }
@@ -988,10 +1058,10 @@ export default function AdminHomeScreen() {
       ids: idsAActualizar,
       modificar_precio: modificarPrecioRegular,
       nuevo_precio: nuevoPrecioRegular,
-      modificar_precio_paquete: modificarPrecioPaquete,
-      nuevo_precio_paquete: nuevoPrecioPaquete,
-      modificar_precio_antojito: modificarPrecioAntojito,
-      nuevo_precio_antojito: nuevoPrecioAntojito,
+      modificar_precio_paquete: false,
+      nuevo_precio_paquete: null,
+      modificar_precio_antojito: false,
+      nuevo_precio_antojito: null,
       modificar_estado: modificarEstadoMasivo,
       nuevo_estado: nuevoEstadoMasivo,
     };
@@ -1045,7 +1115,7 @@ export default function AdminHomeScreen() {
   const handleLimpiarMenuDia = () => {
     setComidasSeleccionadasMenuDia((prev) => {
       const nuevo = { ...prev };
-      const itemsMenuDia = alimentosCat.filter((a) => esTipoMenuDia(a.tipo));
+      const itemsMenuDia = alimentosCat.filter((a) => esTipoMenuDia(a));
 
       if (!catFiltroMenuDia || catFiltroMenuDia === 'Todas') {
         // Si el filtro es Todas, cambiar el valor booleano a false en todos los platillos
@@ -1479,7 +1549,7 @@ export default function AdminHomeScreen() {
 
   // RENDER PESTAÑA GESTIÓN DEL MENÚ
   const renderMenuTab = () => {
-    const todosAlimentosMenuDia = alimentosCat.filter((a) => esTipoMenuDia(a.tipo));
+    const todosAlimentosMenuDia = alimentosCat.filter((a) => esTipoMenuDia(a));
     const comidasActivasDelDia = todosAlimentosMenuDia
       .filter((c) => Number(c.estado) === 1)
       .filter((c) => perteneceACategoriaMenuDia(c, catFiltroMenuDia));
@@ -1766,9 +1836,7 @@ export default function AdminHomeScreen() {
                 activeOpacity={0.8}
               >
                 <Ionicons name="trash-outline" size={16} color="#DC2626" style={{ marginRight: 4 }} />
-                <Text style={styles.btnLimpiarMenuText}>
-                  {catFiltroMenuDia === 'Todas' ? 'Limpiar Todo' : `Limpiar ${catFiltroMenuDia}`}
-                </Text>
+                <Text style={styles.btnLimpiarMenuText}>Quitar todo</Text>
               </TouchableOpacity>
             </View>
 
@@ -1871,6 +1939,73 @@ export default function AdminHomeScreen() {
         {/* SUB-VISTA 3: CATÁLOGO COMPLETO */}
         {vistaMenuModo === 'catalogo' && (
           <View>
+            {/* CARD DE CONFIGURACIÓN DE PRECIOS GLOBALES (PAQUETES Y GUISADO) */}
+            <View style={styles.cardPreciosGlobales}>
+              <View style={styles.preciosGlobalesHeader}>
+                <Ionicons name="pricetags-outline" size={22} color="#0D9488" style={{ marginRight: 8 }} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.preciosGlobalesTitle}>Precio de paquetes</Text>
+                  <Text style={styles.preciosGlobalesSub}>
+                    Configura el precio fijo de los paquetes y el costo adicional cuando un antojito se pide con guisado.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.preciosGlobalesRow}>
+                <View style={styles.precioGlobalItem}>
+                  <Text style={styles.precioGlobalLabel}>Paquete Comida ($):</Text>
+                  <TextInput
+                    style={styles.precioGlobalInput}
+                    keyboardType="numeric"
+                    value={configPrecioComida}
+                    onChangeText={setConfigPrecioComida}
+                    placeholder="85"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={styles.precioGlobalItem}>
+                  <Text style={styles.precioGlobalLabel}>Paquete Desayuno ($):</Text>
+                  <TextInput
+                    style={styles.precioGlobalInput}
+                    keyboardType="numeric"
+                    value={configPrecioDesayuno}
+                    onChangeText={setConfigPrecioDesayuno}
+                    placeholder="85"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <View style={styles.precioGlobalItem}>
+                  <Text style={styles.precioGlobalLabel}>Precio de guisados para antojitos ($):</Text>
+                  <TextInput
+                    style={styles.precioGlobalInput}
+                    keyboardType="numeric"
+                    value={configPrecioGuisado}
+                    onChangeText={setConfigPrecioGuisado}
+                    placeholder="15"
+                    placeholderTextColor="#94A3B8"
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.btnGuardarPreciosGlobales, guardandoPrecios && { opacity: 0.7 }]}
+                  onPress={handleGuardarPreciosGlobales}
+                  disabled={guardandoPrecios}
+                  activeOpacity={0.85}
+                >
+                  {guardandoPrecios ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <>
+                      <Ionicons name="save-outline" size={18} color="#FFFFFF" style={{ marginRight: 6 }} />
+                      <Text style={styles.btnGuardarPreciosGlobalesText}>Guardar Precios</Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+
             <View style={styles.catalogoHeaderRow}>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.catFiltrosScroll}>
                 {['Todas', 'Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarniciones', 'Litros', 'Postres', 'Tortas', 'Molletes', 'Extras', 'Otros'].map((cat) => (
@@ -2582,7 +2717,14 @@ export default function AdminHomeScreen() {
               </TouchableOpacity>
             </View>
 
-            <View style={styles.modeToggleRow}>
+            <ScrollView
+              style={{ flexShrink: 1, width: '100%' }}
+              contentContainerStyle={{ paddingBottom: 10 }}
+              showsVerticalScrollIndicator={true}
+              nestedScrollEnabled={true}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.modeToggleRow}>
               <TouchableOpacity
                 style={[styles.modeToggleBtn, tipoCobro === 'toda' && styles.modeToggleBtnActive]}
                 onPress={() => setTipoCobro('toda')}
@@ -2936,24 +3078,28 @@ export default function AdminHomeScreen() {
               </View>
             )}
 
-            <TouchableOpacity
-              style={[
-                styles.btnConfirmarCobroModal,
-                metodoPago === 'mixto' && restanteMixto > 0 && { backgroundColor: '#94A3B8', opacity: 0.7 },
-              ]}
-              onPress={handleConfirmarCobro}
-              activeOpacity={0.85}
-              disabled={metodoPago === 'mixto' && restanteMixto > 0}
-            >
-              <Ionicons name="checkmark-done-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
-              <Text style={styles.btnConfirmarCobroText}>
-                {metodoPago === 'mixto' && restanteMixto > 0
-                  ? `Faltan $${restanteMixto.toFixed(2)} por cubrir`
-                  : tipoCobro === 'toda'
-                  ? 'Confirmar Cobro Total'
-                  : 'Cobrar Ítems Seleccionados'}
-              </Text>
-            </TouchableOpacity>
+            </ScrollView>
+
+            <View style={{ paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9', width: '100%' }}>
+              <TouchableOpacity
+                style={[
+                  styles.btnConfirmarCobroModal,
+                  metodoPago === 'mixto' && restanteMixto > 0 && { backgroundColor: '#94A3B8', opacity: 0.7 },
+                ]}
+                onPress={handleConfirmarCobro}
+                activeOpacity={0.85}
+                disabled={metodoPago === 'mixto' && restanteMixto > 0}
+              >
+                <Ionicons name="checkmark-done-circle" size={20} color="#FFFFFF" style={{ marginRight: 6 }} />
+                <Text style={styles.btnConfirmarCobroText}>
+                  {metodoPago === 'mixto' && restanteMixto > 0
+                    ? `Faltan $${restanteMixto.toFixed(2)} por cubrir`
+                    : tipoCobro === 'toda'
+                    ? 'Confirmar Cobro Total'
+                    : 'Cobrar Ítems Seleccionados'}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -3093,26 +3239,6 @@ export default function AdminHomeScreen() {
                 </Text>
               ) : null}
 
-              <Text style={styles.inputPagaLabel}>Precio en Paquete ($) (Opcional dejar en blanco si no aplica):</Text>
-              <TextInput
-                style={styles.inputPagaField}
-                keyboardType="numeric"
-                placeholder="Dejar en blanco si no aplica"
-                placeholderTextColor="#94A3B8"
-                value={formPrecioPaquete}
-                onChangeText={setFormPrecioPaquete}
-              />
-
-              <Text style={styles.inputPagaLabel}>Precio en Antojito ($) (Opcional dejar en blanco si no aplica):</Text>
-              <TextInput
-                style={styles.inputPagaField}
-                keyboardType="numeric"
-                placeholder="Dejar en blanco si no aplica"
-                placeholderTextColor="#94A3B8"
-                value={formPrecioAntojito}
-                onChangeText={setFormPrecioAntojito}
-              />
-
               <Text style={styles.inputPagaLabel}>Categoría / Tipo:</Text>
               <View style={styles.opcionesFormRow}>
                 {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Molletes', 'Extra', 'Otros'].map((cat) => (
@@ -3232,14 +3358,14 @@ export default function AdminHomeScreen() {
                 />
               </View>
 
-              {Boolean((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro')) ? (
+              {Boolean((formTipo || '').toLowerCase().includes('bebida') || (formTipo || '').toLowerCase().includes('litro') || (formTipo || '').toLowerCase().includes('postre')) ? (
                 <View style={[styles.switchRow, { marginTop: 10, padding: 10, backgroundColor: '#F0FDFA', borderRadius: 8, borderWidth: 1, borderColor: '#CCFBF1' }]}>
                   <View style={{ flex: 1, paddingRight: 10 }}>
                     <Text style={[styles.switchLabel, { color: '#0F766E', fontWeight: '700' }]}>
-                      🥤 ¿Ofrecer en paquetes?
+                      🥤 / 🍰 ¿Ofrecer en paquetes / Menú del Día?
                     </Text>
                     <Text style={{ fontSize: 11, color: '#0F766E' }}>
-                      Indica si esta bebida está disponible para elegirse en paquetes
+                      Indica si este producto (bebida o postre) está disponible para elegirse en paquetes o menú del día
                     </Text>
                   </View>
                   <Switch
@@ -3397,9 +3523,7 @@ export default function AdminHomeScreen() {
                               <View style={{ flex: 1 }}>
                                 <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{item.nombre}</Text>
                                 <Text style={{ fontSize: 12, color: '#64748B' }}>
-                                  Categoría: {item.tipo} • Regular: ${item.precio}.00
-                                  {item.precio_paquete !== null && item.precio_paquete !== undefined ? ` • Paquete: $${item.precio_paquete}` : ''}
-                                  {item.precio_antojito !== null && item.precio_antojito !== undefined ? ` • Antojito: $${item.precio_antojito}` : ''}
+                                  Categoría: {item.tipo} • Precio: ${item.precio}.00
                                 </Text>
                               </View>
                             </TouchableOpacity>
@@ -3412,7 +3536,7 @@ export default function AdminHomeScreen() {
               })()}
 
               {/* 3. CONFIGURAR NUEVOS PRECIOS O ESTADO */}
-              <Text style={styles.inputPagaLabel}>3. Elige los precios o estado a cambiar:</Text>
+              <Text style={styles.inputPagaLabel}>3. Elige el precio regular o estado a cambiar:</Text>
 
               {/* OPCIÓN PRECIO REGULAR */}
               <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
@@ -3437,60 +3561,6 @@ export default function AdminHomeScreen() {
                     placeholderTextColor="#94A3B8"
                     value={nuevoPrecioRegular}
                     onChangeText={setNuevoPrecioRegular}
-                  />
-                )}
-              </View>
-
-              {/* OPCIÓN PRECIO PAQUETE */}
-              <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarPrecioPaquete ? 8 : 0 }}
-                  onPress={() => setModificarPrecioPaquete(!modificarPrecioPaquete)}
-                >
-                  <Ionicons
-                    name={modificarPrecioPaquete ? 'checkbox' : 'square-outline'}
-                    size={20}
-                    color={modificarPrecioPaquete ? '#D97706' : '#94A3B8'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Precio en Paquete ($)</Text>
-                </TouchableOpacity>
-
-                {modificarPrecioPaquete && (
-                  <TextInput
-                    style={styles.inputPagaField}
-                    keyboardType="numeric"
-                    placeholder="Escribe el nuevo precio en paquete (ej. 40 o blanco para eliminar)"
-                    placeholderTextColor="#94A3B8"
-                    value={nuevoPrecioPaquete}
-                    onChangeText={setNuevoPrecioPaquete}
-                  />
-                )}
-              </View>
-
-              {/* OPCIÓN PRECIO ANTOJITO */}
-              <View style={{ marginBottom: 12, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
-                <TouchableOpacity
-                  style={{ flexDirection: 'row', alignItems: 'center', marginBottom: modificarPrecioAntojito ? 8 : 0 }}
-                  onPress={() => setModificarPrecioAntojito(!modificarPrecioAntojito)}
-                >
-                  <Ionicons
-                    name={modificarPrecioAntojito ? 'checkbox' : 'square-outline'}
-                    size={20}
-                    color={modificarPrecioAntojito ? '#D97706' : '#94A3B8'}
-                    style={{ marginRight: 8 }}
-                  />
-                  <Text style={{ fontSize: 14, fontWeight: '800', color: '#0F172A' }}>Cambiar Precio en Antojito ($)</Text>
-                </TouchableOpacity>
-
-                {modificarPrecioAntojito && (
-                  <TextInput
-                    style={styles.inputPagaField}
-                    keyboardType="numeric"
-                    placeholder="Escribe el nuevo precio en antojito (ej. 10 o blanco para eliminar)"
-                    placeholderTextColor="#94A3B8"
-                    value={nuevoPrecioAntojito}
-                    onChangeText={setNuevoPrecioAntojito}
                   />
                 )}
               </View>
@@ -4307,13 +4377,14 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 20,
     width: '100%',
-    maxWidth: 440,
+    maxWidth: 460,
     maxHeight: '92%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 10,
     elevation: 5,
+    overflow: 'hidden',
   },
   modalHeaderRow: {
     flexDirection: 'row',
@@ -5566,5 +5637,78 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '800',
     color: '#FFFFFF',
+  },
+  cardPreciosGlobales: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#CCFBF1',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 3,
+    elevation: 2,
+  },
+  preciosGlobalesHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0FDFA',
+    paddingBottom: 8,
+  },
+  preciosGlobalesTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  preciosGlobalesSub: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 2,
+  },
+  preciosGlobalesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-end',
+    gap: 12,
+  },
+  precioGlobalItem: {
+    flex: 1,
+    minWidth: 140,
+  },
+  precioGlobalLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#334155',
+    marginBottom: 4,
+  },
+  precioGlobalInput: {
+    height: 42,
+    backgroundColor: '#F8FAFC',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  btnGuardarPreciosGlobales: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0D9488',
+    height: 42,
+    paddingHorizontal: 18,
+    borderRadius: 10,
+    minWidth: 150,
+  },
+  btnGuardarPreciosGlobalesText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '800',
   },
 });

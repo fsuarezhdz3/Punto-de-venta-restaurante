@@ -25,8 +25,6 @@ CREATE TABLE IF NOT EXISTS alimentos (
     nombre VARCHAR(200) NOT NULL,
     tipo VARCHAR(25) NOT NULL,                 -- Comida, Desayuno, Antojito, Bebida, Torta, Molletes, Postre, Entrada, Guarnicion, Extra, Otros
     precio DECIMAL(10,2) NOT NULL,
-    precio_paquete DECIMAL(10,2) NULL DEFAULT NULL,
-    precio_antojito DECIMAL(10,2) NULL DEFAULT NULL,
     aplica_paquete TINYINT(1) NOT NULL DEFAULT 1,
     aplica_paquete_antojito TINYINT(1) NOT NULL DEFAULT 1,
     zona ENUM('barra', 'cocina', 'comal') NOT NULL DEFAULT 'cocina', -- Zonas de preparación
@@ -189,6 +187,21 @@ CREATE TABLE IF NOT EXISTS menu_diseno (
 );
 
 -- =============================================
+-- TABLA: configuracion_precios (Precios Globales de Paquetes y Guisados)
+-- =============================================
+CREATE TABLE IF NOT EXISTS configuracion_precios (
+    id INT PRIMARY KEY DEFAULT 1,
+    precio_paquete_comida DECIMAL(10,2) NOT NULL DEFAULT 85.00,
+    precio_paquete_desayuno DECIMAL(10,2) NOT NULL DEFAULT 85.00,
+    precio_extra_guisado DECIMAL(10,2) NOT NULL DEFAULT 15.00,
+    fecha_actualizacion DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+);
+
+INSERT INTO configuracion_precios (id, precio_paquete_comida, precio_paquete_desayuno, precio_extra_guisado)
+VALUES (1, 85.00, 85.00, 15.00)
+ON DUPLICATE KEY UPDATE id=id;
+
+-- =============================================
 -- DATOS SEMILLA (Inserts iniciales por tipo de cuenta)
 -- Contraseñas cifradas con bcrypt (rounds=10)
 -- =============================================
@@ -209,8 +222,6 @@ INSERT INTO alimentos (
     nombre,
     tipo,
     precio,
-    precio_paquete,
-    precio_antojito,
     aplica_paquete,
     aplica_paquete_antojito,
     zona,
@@ -220,157 +231,157 @@ INSERT INTO alimentos (
 -- ==========================================
 -- COMIDAS (30)
 -- ==========================================
-('Milanesa de pollo empanizada', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Pechuga de pollo a la plancha', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Chile relleno de 3 quesos', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Albondigas de res', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Pechuga rellena en crema de chipotle', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec a la mexicana', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec en salsa pasilla', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec en salsa morita', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec al albañil', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec arriero', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec encebollado', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Sabana de res', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Filete de pescado', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Enchiladas queretanas', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Flautas de pollo', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Mole rojo', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Mole verde', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Bistec en salsa verde', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Costilla en salsa ranchera', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Caldo de pollo', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Tortitas de pollo', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Tortitas de papa', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Tortitas de camaron', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Croquetas de papa con atun', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Asado de bodas', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Rajas con crema', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Tinga de pollo', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Cochinita pibil', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Tacos dorados de papa', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
-('Picadillo de res', 'Comida', 60.00, NULL, 5.00, 1, 1, 'barra', 0),
+('Milanesa de pollo empanizada', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Pechuga de pollo a la plancha', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Chile relleno de 3 quesos', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Albondigas de res', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Pechuga rellena en crema de chipotle', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec a la mexicana', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec en salsa pasilla', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec en salsa morita', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec al albañil', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec arriero', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec encebollado', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Sabana de res', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Filete de pescado', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Enchiladas queretanas', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Flautas de pollo', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Mole rojo', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Mole verde', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Bistec en salsa verde', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Costilla en salsa ranchera', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Caldo de pollo', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Tortitas de pollo', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Tortitas de papa', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Tortitas de camaron', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Croquetas de papa con atun', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Asado de bodas', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Rajas con crema', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Tinga de pollo', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Cochinita pibil', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Tacos dorados de papa', 'Comida', 60.00, 1, 1, 'barra', 1),
+('Picadillo de res', 'Comida', 60.00, 1, 1, 'barra', 1),
 
 -- ==========================================
 -- GUARNICIONES (10)
 -- ==========================================
-('Arroz', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Frijoles', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Verduras al vapor', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Nopales', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Calabacitas', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Papas a la mexicana', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Guacamole', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Spaghetti', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Sopa fria', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
-('Ensalada', 'Guarnicion', 15.00, NULL, NULL, 1, 0, 'barra', 0),
+('Arroz', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Frijoles', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Verduras al vapor', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Nopales', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Calabacitas', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Papas a la mexicana', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Guacamole', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Spaghetti', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Sopa fria', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
+('Ensalada', 'Guarnicion', 15.00, 1, 0, 'barra', 1),
 
 -- ==========================================
 -- ENTRADAS (9)
 -- ==========================================
-('Sopa de verduras', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Consome de pollo', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa de pasta', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa fria de codito', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa de haba', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa de lentejas', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa de tortilla', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Sopa tarasca', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Arroz con huevo', 'Entrada', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
+('Sopa de verduras', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Consome de pollo', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa de pasta', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa fria de codito', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa de haba', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa de lentejas', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa de tortilla', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Sopa tarasca', 'Entrada', 30.00, 1, 0, 'barra', 1),
+('Arroz con huevo', 'Entrada', 30.00, 1, 0, 'barra', 1),
 
 -- ==========================================
 -- BEBIDAS (14)
 -- ==========================================
-('Cafe de olla', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Nescafe', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Te', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de guayaba', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de jamaica', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de melon', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de papaya', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de limon', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de piña', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de tamarindo', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de horchata', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de pepino', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de pepino con limon', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
-('Agua de maracuya', 'Bebida', 30.00, 20.00, NULL, 1, 0, 'barra', 0),
+('Cafe de olla', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Nescafe', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Te', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de guayaba', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de jamaica', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de melon', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de papaya', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de limon', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de piña', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de tamarindo', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de horchata', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de pepino', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de pepino con limon', 'Bebida', 30.00, 1, 0, 'barra', 1),
+('Agua de maracuya', 'Bebida', 30.00, 1, 0, 'barra', 1),
 
 -- ==========================================
 -- POSTRES (6)
 -- ==========================================
-('Carlota de limon', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
-('Gelatina', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
-('Fresas con crema', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
-('Ensalada de manzana', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
-('Churros', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
-('Galletas', 'Postre', 15.00, NULL, NULL, 0, 0, 'barra', 0),
+('Carlota de limon', 'Postre', 15.00, 0, 0, 'barra', 1),
+('Gelatina', 'Postre', 15.00, 0, 0, 'barra', 1),
+('Fresas con crema', 'Postre', 15.00, 0, 0, 'barra', 1),
+('Ensalada de manzana', 'Postre', 15.00, 0, 0, 'barra', 1),
+('Churros', 'Postre', 15.00, 0, 0, 'barra', 1),
+('Galletas', 'Postre', 15.00, 0, 0, 'barra', 1),
 
 -- ==========================================
 -- ANTOJITOS (6)
 -- ==========================================
-('Tacos', 'Antojito', 25.00, NULL, NULL, 0, 0, 'comal', 0),
-('Gordita', 'Antojito', 40.00, NULL, NULL, 0, 0, 'comal', 0),
-('Gordita combinada', 'Antojito', 45.00, NULL, NULL, 0, 0, 'comal', 0),
-('Quesadilla', 'Antojito', 40.00, NULL, NULL, 0, 0, 'comal', 0),
-('Sope', 'Antojito', 35.00, NULL, NULL, 0, 0, 'comal', 0),
-('Huarache', 'Antojito', 50.00, NULL, NULL, 0, 0, 'comal', 0),
+('Tacos', 'Antojito', 25.00, 0, 0, 'comal', 1),
+('Gordita', 'Antojito', 40.00, 0, 0, 'comal', 1),
+('Gordita combinada', 'Antojito', 45.00, 0, 0, 'comal', 1),
+('Quesadilla', 'Antojito', 40.00, 0, 0, 'comal', 1),
+('Sope', 'Antojito', 35.00, 0, 0, 'comal', 1),
+('Huarache', 'Antojito', 50.00, 0, 0, 'comal', 1),
 
 -- ==========================================
 -- TORTAS (4)
 -- ==========================================
-('Torta de jamon', 'Torta', 50.00, NULL, NULL, 0, 0, 'barra', 0),
-('Torta de milanesa', 'Torta', 60.00, NULL, NULL, 0, 0, 'barra', 0),
-('Torta de chorizo', 'Torta', 50.00, NULL, NULL, 0, 0, 'barra', 0),
-('Torta de salchicha', 'Torta', 50.00, NULL, NULL, 0, 0, 'barra', 0),
+('Torta de jamon', 'Torta', 50.00, 0, 0, 'barra', 1),
+('Torta de milanesa', 'Torta', 60.00, 0, 0, 'barra', 1),
+('Torta de chorizo', 'Torta', 50.00, 0, 0, 'barra', 1),
+('Torta de salchicha', 'Torta', 50.00, 0, 0, 'barra', 1),
 
 -- ==========================================
 -- DESAYUNOS (21)
 -- ==========================================
-('Chilaquiles rojos', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Chilaquiles verdes', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Chilaquiles divorciados', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enchiladas verdes de pollo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enchiladas verdes de queso', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Entomatadas de pollo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Entomatadas de queso', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enfrijoladas de pollo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enfrijoladas de queso', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Hot cakes', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Huevos a la mexicana', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Huevos con jamon', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Huevos con salchicha', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Huevos con chorizo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Huevos rancheros', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Omelette de jamon', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Omelette de chorizo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Omelette de salchicha', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Omelette de verduras', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enmoladas de pollo', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
-('Enmoladas de queso', 'Desayuno', 60.00, NULL, NULL, 0, 0, 'cocina', 0),
+('Chilaquiles rojos', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Chilaquiles verdes', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Chilaquiles divorciados', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enchiladas verdes de pollo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enchiladas verdes de queso', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Entomatadas de pollo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Entomatadas de queso', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enfrijoladas de pollo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enfrijoladas de queso', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Hot cakes', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Huevos a la mexicana', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Huevos con jamon', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Huevos con salchicha', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Huevos con chorizo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Huevos rancheros', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Omelette de jamon', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Omelette de chorizo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Omelette de salchicha', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Omelette de verduras', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enmoladas de pollo', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
+('Enmoladas de queso', 'Desayuno', 60.00, 0, 0, 'cocina', 1),
 
 -- ==========================================
 -- LITROS (10)
 -- ==========================================
-('Litro de Arroz', 'Litro', 60.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Frijoles', 'Litro', 80.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Spaguetti', 'Litro', 80.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Verduras', 'Litro', 80.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Sopa', 'Litro', 80.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Comida de res', 'Litro', 240.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Comida de cerdo', 'Litro', 180.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Comida de pollo', 'Litro', 180.00, NULL, NULL, 0, 0, 'barra', 1),
-('Litro de Mole', 'Litro', 120.00, NULL, NULL, 0, 0, 'barra', 1),
+('Litro de Arroz', 'Litro', 60.00, 0, 0, 'barra', 1),
+('Litro de Frijoles', 'Litro', 80.00, 0, 0, 'barra', 1),
+('Litro de Spaguetti', 'Litro', 80.00, 0, 0, 'barra', 1),
+('Litro de Verduras', 'Litro', 80.00, 0, 0, 'barra', 1),
+('Litro de Sopa', 'Litro', 80.00, 0, 0, 'barra', 1),
+('Litro de Comida de res', 'Litro', 240.00, 0, 0, 'barra', 1),
+('Litro de Comida de cerdo', 'Litro', 180.00, 0, 0, 'barra', 1),
+('Litro de Comida de pollo', 'Litro', 180.00, 0, 0, 'barra', 1),
+('Litro de Mole', 'Litro', 120.00, 0, 0, 'barra', 1),
 
 -- ==========================================
 -- MEDIOS LITROS (10)
 -- ==========================================
-('Medio de Arroz', 'Litro', 30.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Frijoles', 'Litro', 40.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Spaguetti', 'Litro', 40.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Verduras', 'Litro', 40.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Sopa', 'Litro', 40.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Comida de res', 'Litro', 120.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Comida de cerdo', 'Litro', 90.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Comida de pollo', 'Litro', 90.00, NULL, NULL, 0, 0, 'barra', 1),
-('Medio de Mole', 'Litro', 60.00, NULL, NULL, 0, 0, 'barra', 1);
+('Medio de Arroz', 'Litro', 30.00, 0, 0, 'barra', 1),
+('Medio de Frijoles', 'Litro', 40.00, 0, 0, 'barra', 1),
+('Medio de Spaguetti', 'Litro', 40.00, 0, 0, 'barra', 1),
+('Medio de Verduras', 'Litro', 40.00, 0, 0, 'barra', 1),
+('Medio de Sopa', 'Litro', 40.00, 0, 0, 'barra', 1),
+('Medio de Comida de res', 'Litro', 120.00, 0, 0, 'barra', 1),
+('Medio de Comida de cerdo', 'Litro', 90.00, 0, 0, 'barra', 1),
+('Medio de Comida de pollo', 'Litro', 90.00, 0, 0, 'barra', 1),
+('Medio de Mole', 'Litro', 60.00, 0, 0, 'barra', 1);

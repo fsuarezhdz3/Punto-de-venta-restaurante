@@ -40,7 +40,7 @@ export default function MeseroHeader() {
       </View>
 
       <TouchableOpacity style={styles.logoutButton} onPress={logout} activeOpacity={0.7}>
-        <Ionicons name="log-out-outline" size={20} color="#DC2626" />
+        <Ionicons name="log-out-outline" size={18} color="#DC2626" />
       </TouchableOpacity>
     </View>
   );
@@ -52,51 +52,52 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
-    paddingHorizontal: 20,
-    paddingTop: 14,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 8,
     borderBottomWidth: 1,
     borderBottomColor: '#F1F5F9',
-    marginTop: 4,
   },
   leftSection: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   logoBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     backgroundColor: '#FFFFFF',
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 12,
+    marginRight: 10,
     borderWidth: 1,
     borderColor: '#FEF2F2',
   },
   logoImage: {
-    width: 36,
-    height: 36,
+    width: 28,
+    height: 28,
   },
   userInfo: {
     justifyContent: 'center',
   },
   waiterNameText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '800',
     color: '#0F172A',
-    letterSpacing: -0.3,
+    letterSpacing: -0.2,
+    lineHeight: 19,
   },
   selectedMesaText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
     fontWeight: '600',
-    marginTop: 2,
+    marginTop: 1,
+    lineHeight: 14,
   },
   logoutButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     backgroundColor: '#FEF2F2',
     justifyContent: 'center',
     alignItems: 'center',

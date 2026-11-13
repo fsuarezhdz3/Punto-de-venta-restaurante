@@ -28,7 +28,6 @@
     ],
     "win": {
       "target": [
-        "portable",
         "nsis"
       ],
       "icon": "assets/iconoapp.png"

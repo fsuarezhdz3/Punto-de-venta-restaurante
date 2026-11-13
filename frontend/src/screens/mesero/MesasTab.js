@@ -75,7 +75,26 @@ export default function MesasTab() {
   useEffect(() => {
     cargarParaLlevarActivos();
     cargarEstadoMesas();
+
+    const timer = setInterval(() => {
+      cargarParaLlevarActivos();
+      cargarEstadoMesas();
+    }, 3000);
+
+    return () => clearInterval(timer);
   }, []);
+
+  // Si la mesa seleccionada actualmente es un pedido para llevar que ya se cobró o canceló, deseleccionarla
+  useEffect(() => {
+    if (selectedMesa?.tipo === 'para_llevar' && selectedMesa?.num_orden) {
+      const sigueActivo = pedidosParaLlevarActivos.some(
+        (p) => Number(p.num_orden) === Number(selectedMesa.num_orden) || Number(p.num_mesa) === Number(selectedMesa.num_mesa)
+      );
+      if (!sigueActivo) {
+        clearMesa();
+      }
+    }
+  }, [pedidosParaLlevarActivos, selectedMesa]);
 
   // Crear un nuevo pedido para llevar con número de mesa dinámico (100, 101, 102...)
   const handleCrearNuevoParaLlevar = async () => {
@@ -173,7 +192,10 @@ export default function MesasTab() {
           styles.paraLlevarCard,
           selectedMesa?.tipo === 'para_llevar' && styles.paraLlevarCardActiveSelected,
         ]}
-        onPress={() => setModalParaLlevarVisible(true)}
+        onPress={() => {
+          cargarParaLlevarActivos();
+          setModalParaLlevarVisible(true);
+        }}
         activeOpacity={0.85}
       >
         <View
