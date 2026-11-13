@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect } from 'react';
+import React, { useContext, useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   Text,
@@ -11,9 +11,12 @@ import {
   Modal,
   TextInput,
   useWindowDimensions,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { MeseroContext } from '../../context/MeseroContext';
+import { AuthContext } from '../../context/AuthContext';
 import { API_URL } from '../../config/api';
 import ConfirmarEliminarModal from '../../components/ConfirmarEliminarModal';
 
@@ -75,6 +78,9 @@ const limpiarZona = (str = '') => {
 
 export default function OrdenesTab() {
   const { selectedMesa, setActiveTab, selectMesa } = useContext(MeseroContext);
+  const { user } = useContext(AuthContext);
+  const esMesero = user?.tipo?.toLowerCase() === 'mesero';
+  const editScrollViewRef = useRef(null);
   const { width } = useWindowDimensions();
   const [itemsComanda, setItemsComanda] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1269,8 +1275,11 @@ export default function OrdenesTab() {
         transparent={true}
         onRequestClose={() => setEditModalVisible(false)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <View style={[styles.modalContent, { maxHeight: '90%' }]}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>✏️ Editar Comanda #{itemEditando?.id}</Text>
               <TouchableOpacity onPress={() => setEditModalVisible(false)}>
@@ -1292,7 +1301,12 @@ export default function OrdenesTab() {
               </View>
             )}
 
-            <ScrollView style={{ maxHeight: 440 }} showsVerticalScrollIndicator={false}>
+            <ScrollView
+              ref={editScrollViewRef}
+              style={{ maxHeight: 440 }}
+              showsVerticalScrollIndicator={false}
+              keyboardShouldPersistTaps="handled"
+            >
               {/* 1. SECCIÓN PRINCIPAL SEGÚN CATEGORÍA */}
               {categoriaEditForm === 'desayunos' && (
                 <>
@@ -1592,22 +1606,51 @@ export default function OrdenesTab() {
                 value={editForm.comentarios}
                 onChangeText={(txt) => setEditForm((p) => ({ ...p, comentarios: txt }))}
                 placeholder="Ej. Sin cebolla, extra salsa..."
+                onFocus={() => {
+                  setTimeout(() => {
+                    editScrollViewRef.current?.scrollToEnd({ animated: true });
+                  }, 200);
+                }}
               />
 
               {/* 4. COSTO TOTAL */}
-              <Text style={styles.inputLabel}>Costo Total ($)</Text>
-              <View style={styles.costoInputContainer}>
-                <Text style={styles.costoSignoText}>$</Text>
-                <TextInput
-                  style={styles.costoTextInput}
-                  keyboardType="numeric"
-                  value={editForm.costo}
-                  onChangeText={(txt) => setEditForm((p) => ({ ...p, costo: txt }))}
-                  placeholder="0.00"
-                  placeholderTextColor="#94A3B8"
-                  selectTextOnFocus={true}
-                />
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                <Text style={styles.inputLabel}>Costo Total ($)</Text>
+                {esMesero && (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Ionicons name="lock-closed" size={13} color="#64748B" />
+                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '600' }}>Calculado automáticamente</Text>
+                  </View>
+                )}
               </View>
+
+              {esMesero ? (
+                <View style={[styles.costoInputContainer, { backgroundColor: '#F8FAFC', borderColor: '#CBD5E1' }]}>
+                  <Text style={[styles.costoSignoText, { color: '#64748B' }]}>$</Text>
+                  <Text style={[styles.costoTextInput, { paddingVertical: 12, color: '#0F766E', fontWeight: '800' }]}>
+                    {Number(editForm.costo || 0).toFixed(2)}
+                  </Text>
+                  <Ionicons name="lock-closed" size={16} color="#94A3B8" />
+                </View>
+              ) : (
+                <View style={styles.costoInputContainer}>
+                  <Text style={styles.costoSignoText}>$</Text>
+                  <TextInput
+                    style={styles.costoTextInput}
+                    keyboardType="numeric"
+                    value={editForm.costo}
+                    onChangeText={(txt) => setEditForm((p) => ({ ...p, costo: txt }))}
+                    placeholder="0.00"
+                    placeholderTextColor="#94A3B8"
+                    selectTextOnFocus={true}
+                    onFocus={() => {
+                      setTimeout(() => {
+                        editScrollViewRef.current?.scrollToEnd({ animated: true });
+                      }, 200);
+                    }}
+                  />
+                </View>
+              )}
             </ScrollView>
 
             <View style={styles.modalButtonsRow}>
@@ -1624,7 +1667,7 @@ export default function OrdenesTab() {
               </TouchableOpacity>
             </View>
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* SUB-MODAL PICKER LISTA DE OPCIONES TIPO MENU */}
