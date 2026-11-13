@@ -3,6 +3,9 @@ const path = require('path');
 const http = require('http');
 const fs = require('fs');
 
+// Permitir autoplay de audio sin requerir interacción del usuario en Electron
+app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
+
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript; charset=utf-8',
@@ -17,6 +20,8 @@ const MIME_TYPES = {
   '.ttf': 'font/ttf',
   '.woff': 'font/woff',
   '.woff2': 'font/woff2',
+  '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
 };
 
 let serverInstance = null;

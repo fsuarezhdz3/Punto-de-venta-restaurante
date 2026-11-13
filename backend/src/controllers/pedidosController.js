@@ -478,9 +478,9 @@ const getComalPendientes = async (req, res) => {
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
        LEFT JOIN cuentas c ON ap.cuenta = c.id
-       LEFT JOIN alimentos a ON ap.alimento = a.nombre
+       LEFT JOIN alimentos a ON (ap.id_alimento = a.id OR ap.alimento = a.nombre OR ap.alimento LIKE CONCAT(a.nombre, '-%'))
        WHERE ap.estado = 0 
-         AND (a.zona = 'comal' OR a.tipo = 'Antojito' OR ap.guiso IS NOT NULL OR ap.alimento LIKE '%sope%' OR ap.alimento LIKE '%gordita%' OR ap.alimento LIKE '%tlacoyo%' OR ap.alimento LIKE '%quesadilla%' OR ap.alimento LIKE '%pambazo%' OR ap.alimento LIKE '%flauta%' OR ap.alimento LIKE '%taco%' OR ap.alimento LIKE '%enchilada%' OR ap.alimento LIKE '%antojito%')
+         AND (a.zona = 'comal' OR a.tipo = 'Antojito' OR ap.guiso IS NOT NULL OR ap.alimento LIKE '%sope%' OR ap.alimento LIKE '%gordita%' OR ap.alimento LIKE '%tlacoyo%' OR ap.alimento LIKE '%quesadilla%' OR ap.alimento LIKE '%pambazo%' OR ap.alimento LIKE '%flauta%' OR ap.alimento LIKE '%taco%' OR ap.alimento LIKE '%enchilada%' OR ap.alimento LIKE '%antojito%' OR ap.alimento LIKE '%-comal')
          AND p.estado IN (0, 1)
        ORDER BY ap.id ASC`
     );
@@ -502,9 +502,9 @@ const getComalHistorialHoy = async (req, res) => {
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
        LEFT JOIN cuentas c ON ap.cuenta = c.id
-       LEFT JOIN alimentos a ON ap.alimento = a.nombre
+       LEFT JOIN alimentos a ON (ap.id_alimento = a.id OR ap.alimento = a.nombre OR ap.alimento LIKE CONCAT(a.nombre, '-%'))
        WHERE ap.estado IN (2, 3, 4) 
-         AND (a.zona = 'comal' OR a.tipo = 'Antojito' OR ap.guiso IS NOT NULL OR ap.alimento LIKE '%sope%' OR ap.alimento LIKE '%gordita%' OR ap.alimento LIKE '%tlacoyo%' OR ap.alimento LIKE '%quesadilla%' OR ap.alimento LIKE '%pambazo%' OR ap.alimento LIKE '%flauta%' OR ap.alimento LIKE '%taco%' OR ap.alimento LIKE '%enchilada%' OR ap.alimento LIKE '%antojito%')
+         AND (a.zona = 'comal' OR a.tipo = 'Antojito' OR ap.guiso IS NOT NULL OR ap.alimento LIKE '%sope%' OR ap.alimento LIKE '%gordita%' OR ap.alimento LIKE '%tlacoyo%' OR ap.alimento LIKE '%quesadilla%' OR ap.alimento LIKE '%pambazo%' OR ap.alimento LIKE '%flauta%' OR ap.alimento LIKE '%taco%' OR ap.alimento LIKE '%enchilada%' OR ap.alimento LIKE '%antojito%' OR ap.alimento LIKE '%-comal')
          AND DATE(p.fecha_pedido) = CURDATE()
        ORDER BY ap.id DESC`
     );
@@ -530,7 +530,7 @@ const getCocinaPendientes = async (req, res) => {
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
        LEFT JOIN cuentas c ON ap.cuenta = c.id
-       LEFT JOIN alimentos a ON ap.alimento = a.nombre
+       LEFT JOIN alimentos a ON (ap.id_alimento = a.id OR ap.alimento = a.nombre OR ap.alimento LIKE CONCAT(a.nombre, '-%'))
        WHERE ap.estado = 0 
          AND ap.alimento NOT LIKE '%-barra'
          AND ap.alimento NOT LIKE '%-comal'
@@ -594,7 +594,7 @@ const getCocinaHistorialHoy = async (req, res) => {
        FROM alimentos_pedidos ap
        INNER JOIN pedidos p ON ap.num_orden = p.num_orden
        LEFT JOIN cuentas c ON ap.cuenta = c.id
-       LEFT JOIN alimentos a ON ap.alimento = a.nombre
+       LEFT JOIN alimentos a ON (ap.id_alimento = a.id OR ap.alimento = a.nombre OR ap.alimento LIKE CONCAT(a.nombre, '-%'))
        WHERE ap.estado IN (0, 1, 2, 3, 4) 
          AND ap.alimento NOT LIKE '%-barra'
          AND ap.alimento NOT LIKE '%-comal'

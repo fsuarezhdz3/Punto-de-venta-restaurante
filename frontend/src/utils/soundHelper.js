@@ -8,7 +8,8 @@ function getNativePlayer() {
     try {
       const { createAudioPlayer } = require('expo-audio');
       if (createAudioPlayer) {
-        nativePlayer = createAudioPlayer(require('../../assets/notificacion.wav'));
+        nativePlayer = createAudioPlayer(require('../../assets/notificacion.wav'), { downloadFirst: true });
+        nativePlayer.volume = 1.0;
       }
     } catch (e) {
       console.warn('No se pudo inicializar expo-audio:', e);
@@ -18,6 +19,20 @@ function getNativePlayer() {
 }
 
 let webAudioContext = null;
+let webAudioEl = null;
+
+function getWebAudioElement() {
+  if (typeof window === 'undefined' || typeof Audio === 'undefined') return null;
+  if (!webAudioEl) {
+    try {
+      const wavAsset = require('../../assets/notificacion.wav');
+      const src = (typeof wavAsset === 'string') ? wavAsset : (wavAsset?.uri || wavAsset?.default || wavAsset);
+      webAudioEl = new Audio(src);
+      webAudioEl.volume = 1.0;
+    } catch (e) {}
+  }
+  return webAudioEl;
+}
 
 function getWebAudioContext() {
   if (Platform.OS !== 'web' || typeof window === 'undefined') return null;
@@ -27,41 +42,46 @@ function getWebAudioContext() {
     if (!webAudioContext) {
       webAudioContext = new AudioContextClass();
     }
-    if (webAudioContext.state === 'suspended') {
-      webAudioContext.resume().catch(() => {});
-    }
     return webAudioContext;
   } catch (e) {
     return null;
   }
 }
 
-// Desbloquear audio automáticamente al tocar la pantalla o hacer clic en web/móvil
+// Desbloquear audio automáticamente al tocar la pantalla, hacer clic o presionar una tecla
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
   const unlockAudio = () => {
-    getWebAudioContext();
-    window.removeEventListener('click', unlockAudio);
-    window.removeEventListener('touchstart', unlockAudio);
+    try {
+      const ctx = getWebAudioContext();
+      if (ctx && ctx.state === 'suspended') {
+        ctx.resume().catch(() => {});
+      }
+      const audio = getWebAudioElement();
+      if (audio) {
+        audio.load();
+      }
+    } catch (e) {}
   };
-  window.addEventListener('click', unlockAudio, { passive: true });
-  window.addEventListener('touchstart', unlockAudio, { passive: true });
+  ['click', 'touchstart', 'keydown', 'mousedown', 'pointerdown'].forEach((evt) => {
+    window.addEventListener(evt, unlockAudio, { passive: true });
+  });
 }
 
 let ultimoSonidoTimestamp = 0;
 
 /**
  * Reproduce el timbre/campana de nueva comanda y vibra el teléfono móvil.
- * Funciona de manera instantánea y confiable en Computadora (Web/Electron) y Celular (Nativo/Web móvil).
+ * Funciona de manera instantánea y confiable en Computadora (Web/Electron) y Celular (Nativo Android / iOS).
  */
 export async function reproducirNotificacionComanda() {
   const ahora = Date.now();
-  // Evitar saturar el audio si se detectan varios platillos en el mismo ciclo (debounce 1.5s)
-  if (ahora - ultimoSonidoTimestamp < 1500) {
+  // Debounce de 800ms para evitar saturar si llegan múltiples ítems juntos
+  if (ahora - ultimoSonidoTimestamp < 800) {
     return;
   }
   ultimoSonidoTimestamp = ahora;
 
-  // 1. Vibración en celulares (tanto Web móvil como App nativa)
+  // 1. Vibración en dispositivos móviles (Web móvil o App nativa)
   try {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.vibrate) {
       navigator.vibrate([400, 150, 400]);
@@ -72,34 +92,46 @@ export async function reproducirNotificacionComanda() {
 
   // 2. Si estamos en plataforma Web (Navegador móvil, escritorio o Electron)
   if (Platform.OS === 'web') {
+    // 2a. Intentar reproducir archivo .wav con elemento de Audio HTML5
+    try {
+      const audioEl = getWebAudioElement();
+      if (audioEl) {
+        audioEl.currentTime = 0;
+        const playPromise = audioEl.play();
+        if (playPromise !== undefined) {
+          playPromise.catch(() => {});
+        }
+      }
+    } catch (e) {}
+
+    // 2b. Generar sonido de campana nítido con Web Audio API (garantizado en todos los navegadores y Electron)
     try {
       const ctx = getWebAudioContext();
       if (ctx) {
+        if (ctx.state === 'suspended') {
+          await ctx.resume().catch(() => {});
+        }
         const now = ctx.currentTime;
 
-        // Campana 1 (La 880Hz)
-        const osc1 = ctx.createOscillator();
-        const gain1 = ctx.createGain();
-        osc1.type = 'sine';
-        osc1.frequency.setValueAtTime(880, now);
-        gain1.gain.setValueAtTime(0.4, now);
-        gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.6);
-        osc1.connect(gain1);
-        gain1.connect(ctx.destination);
-        osc1.start(now);
-        osc1.stop(now + 0.6);
+        // Campana triple armónica de restaurante (La 880Hz -> Re 1174.66Hz -> La agudo 1760Hz)
+        const notas = [
+          { freq: 880, start: 0, dur: 0.55, gain: 0.75 },
+          { freq: 1174.66, start: 0.14, dur: 0.65, gain: 0.85 },
+          { freq: 1760, start: 0.28, dur: 0.95, gain: 1.0 },
+        ];
 
-        // Campana 2 (Mi agudo 1318.5Hz)
-        const osc2 = ctx.createOscillator();
-        const gain2 = ctx.createGain();
-        osc2.type = 'sine';
-        osc2.frequency.setValueAtTime(1318.5, now + 0.16);
-        gain2.gain.setValueAtTime(0.5, now + 0.16);
-        gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.9);
-        osc2.connect(gain2);
-        gain2.connect(ctx.destination);
-        osc2.start(now + 0.16);
-        osc2.stop(now + 0.9);
+        notas.forEach(({ freq, start, dur, gain }) => {
+          const osc = ctx.createOscillator();
+          const g = ctx.createGain();
+          osc.type = 'triangle'; // Onda triangular produce timbre armónico claro tipo campana
+          osc.frequency.setValueAtTime(freq, now + start);
+          g.gain.setValueAtTime(gain, now + start);
+          g.gain.exponentialRampToValueAtTime(0.001, now + start + dur);
+          osc.connect(g);
+          g.connect(ctx.destination);
+          osc.start(now + start);
+          osc.stop(now + start + dur);
+        });
 
         return;
       }
@@ -108,12 +140,16 @@ export async function reproducirNotificacionComanda() {
     }
   }
 
-  // 3. Si estamos en App Nativa (Android / iOS)
+  // 3. Si estamos en App Nativa (Android / iOS con expo-audio)
   try {
     const player = getNativePlayer();
     if (player) {
-      player.seekTo(0);
-      player.play();
+      player.volume = 1.0;
+      if (typeof player.seekTo === 'function') {
+        player.seekTo(0).then(() => player.play()).catch(() => player.play());
+      } else {
+        player.play();
+      }
     }
   } catch (e) {
     console.warn('Error al reproducir audio nativo expo-audio:', e);

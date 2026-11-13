@@ -87,10 +87,10 @@ export default function BarraHomeScreen() {
     cargarDatos(pendientes.length === 0 && historialHoy.length === 0);
 
     const timer = setInterval(() => {
-      if (tabActiva === 'pendientes') {
-        cargarPendientes(false);
-      } else {
-        cargarHistorialHoy(false);
+      // Siempre verificar pendientes para disparar sonido de nuevos pedidos en Barra
+      cargarPendientes();
+      if (tabActiva === 'historial') {
+        cargarHistorialHoy();
       }
     }, 3000);
 
@@ -99,9 +99,9 @@ export default function BarraHomeScreen() {
 
   const cargarDatos = async (mostrarLoading = true) => {
     if (mostrarLoading) setLoading(true);
-    if (tabActiva === 'pendientes') {
-      await cargarPendientes();
-    } else {
+    // Siempre cargar pendientes para mantener sincronizado conocidosIdsRef y alertar nuevos pedidos
+    await cargarPendientes();
+    if (tabActiva === 'historial') {
       await cargarHistorialHoy();
     }
     setLoading(false);

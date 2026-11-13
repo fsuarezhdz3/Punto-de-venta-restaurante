@@ -34,53 +34,77 @@ export default function ComalHomeScreen() {
 
   // Cargar comandas de comal en tiempo real (auto-refresh silencioso cada 3s)
   useEffect(() => {
-    cargarOrdenesComal(itemsComal.length === 0);
+    cargarDatos(itemsComal.length === 0);
 
     const timer = setInterval(() => {
-      cargarOrdenesComal(false);
+      refrescarEnSegundoPlano();
     }, 3000);
 
     return () => clearInterval(timer);
   }, [tabActiva]);
 
-  const cargarOrdenesComal = async (mostrarLoading = false) => {
+  const refrescarEnSegundoPlano = async () => {
+    if (tabActiva === 'pendientes') {
+      await verificarPendientes(true);
+    } else {
+      await Promise.all([verificarPendientes(false), cargarHistorialHoy(false)]);
+    }
+  };
+
+  const verificarPendientes = async (actualizarVista = true) => {
+    try {
+      const res = await fetch(`${API_URL}/pedidos/comal/pendientes`);
+      const data = await res.json();
+      if (res.ok && data.items) {
+        if (conocidosIdsRef.current !== null) {
+          const hayNuevos = data.items.some((item) => !conocidosIdsRef.current.has(item.id));
+          if (hayNuevos) {
+            reproducirNotificacionComanda();
+          }
+        }
+        conocidosIdsRef.current = new Set(data.items.map((item) => item.id));
+        if (actualizarVista) {
+          setItemsComal(data.items);
+        }
+      } else if (actualizarVista) {
+        setItemsComal([]);
+      }
+    } catch (err) {
+      console.log('Error al consultar comanda de comal:', err.message);
+    }
+  };
+
+  const cargarHistorialHoy = async (mostrarLoading = false) => {
     try {
       if (mostrarLoading) setLoading(true);
-
-      const endpoint =
-        tabActiva === 'pendientes'
-          ? `${API_URL}/pedidos/comal/pendientes`
-          : `${API_URL}/pedidos/comal/historial-hoy`;
-
-      const res = await fetch(endpoint);
+      const res = await fetch(`${API_URL}/pedidos/comal/historial-hoy`);
       const data = await res.json();
-
       if (res.ok && data.items) {
-        if (tabActiva === 'pendientes') {
-          // Si ya teníamos ítems cargados y llega uno nuevo, activar la campanada y vibración
-          if (conocidosIdsRef.current !== null) {
-            const hayNuevos = data.items.some((item) => !conocidosIdsRef.current.has(item.id));
-            if (hayNuevos) {
-              reproducirNotificacionComanda();
-            }
-          }
-          conocidosIdsRef.current = new Set(data.items.map((item) => item.id));
-        }
         setItemsComal(data.items);
       } else {
         setItemsComal([]);
       }
     } catch (err) {
-      console.log('Error al consultar comanda de comal:', err.message);
+      console.log('Error al consultar historial de comal:', err.message);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      if (mostrarLoading) setLoading(false);
     }
+  };
+
+  const cargarDatos = async (mostrarLoading = false) => {
+    if (mostrarLoading) setLoading(true);
+    if (tabActiva === 'pendientes') {
+      await verificarPendientes(true);
+    } else {
+      await Promise.all([verificarPendientes(false), cargarHistorialHoy(false)]);
+    }
+    setLoading(false);
+    setRefreshing(false);
   };
 
   const onRefresh = () => {
     setRefreshing(true);
-    cargarOrdenesComal(false);
+    cargarDatos(false);
   };
 
   // Conmutar marcado del bloque (Rojo 🔴 <-> Verde 🟢)
