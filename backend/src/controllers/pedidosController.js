@@ -26,7 +26,7 @@ const obtenerZonaAlimento = async (item) => {
         const catZona = (rows[0].zona || '').toLowerCase();
         const catTipo = (rows[0].tipo || '').toLowerCase();
         if (['cocina', 'comal', 'barra'].includes(catZona)) return catZona;
-        if (['desayuno', 'comida', 'platos fuertes', 'entrada', 'guarnicion', 'torta', 'mollete', 'molletes', 'otros', 'otro'].includes(catTipo)) return 'cocina';
+        if (['desayuno', 'comida', 'platos fuertes', 'entrada', 'guarnicion', 'guarnición', 'torta', 'mollete', 'molletes', 'otros', 'otro'].includes(catTipo)) return 'cocina';
         if (['antojito'].includes(catTipo)) return 'comal';
         if (['bebida', 'postre', 'litros', 'litro'].includes(catTipo)) return 'barra';
       }
@@ -540,7 +540,7 @@ const getCocinaPendientes = async (req, res) => {
          AND (
            a.zona = 'cocina' 
            OR ap.alimento LIKE '%-cocina'
-           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta', 'Mollete', 'Molletes', 'Otros', 'Otro') 
+           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Guarnición', 'Torta', 'Mollete', 'Molletes', 'Otros', 'Otro') 
            OR (
              ap.guiso IS NULL 
              AND ap.alimento NOT LIKE '%sope%' 
@@ -604,7 +604,7 @@ const getCocinaHistorialHoy = async (req, res) => {
          AND (
            a.zona = 'cocina' 
            OR ap.alimento LIKE '%-cocina'
-           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Torta', 'Mollete', 'Molletes', 'Otros', 'Otro') 
+           OR a.tipo IN ('Desayuno', 'Comida', 'Platos Fuertes', 'Entrada', 'Guarnicion', 'Guarnición', 'Torta', 'Mollete', 'Molletes', 'Otros', 'Otro') 
            OR (
              ap.guiso IS NULL 
              AND ap.alimento NOT LIKE '%sope%' 

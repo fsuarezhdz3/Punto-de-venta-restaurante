@@ -64,7 +64,7 @@ export default function ComidaView({ onVolverMenu }) {
       if (res.ok && data.alimentos) {
         const bdEntradas = data.alimentos.filter((a) => a.tipo === 'Entrada');
         const bdComida = data.alimentos.filter((a) => a.tipo === 'Comida' || a.tipo === 'Platos Fuertes');
-        const bdGuarniciones = data.alimentos.filter((a) => a.tipo === 'Guarnicion');
+        const bdGuarniciones = data.alimentos.filter((a) => (a.tipo || '').toLowerCase().includes('guarnic'));
         const bdBebidas = data.alimentos.filter(
           (a) => (a.tipo === 'Bebida' || a.tipo === 'Bebidas') && Number(a.aplica_paquete !== undefined && a.aplica_paquete !== null ? a.aplica_paquete : 1) === 1
         );

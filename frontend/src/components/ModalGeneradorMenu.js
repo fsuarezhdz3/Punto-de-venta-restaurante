@@ -93,7 +93,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
     const guarnicionesItems = activos
       .filter((a) => {
         const t = (a.tipo || '').toLowerCase();
-        return t === 'guarnicion' || t === 'guarniciones';
+        return t.includes('guarnic');
       })
       .map((a) => formatearConPrecio(a, 20));
 

@@ -201,7 +201,7 @@ const guardarMenuDelDia = async (req, res) => {
       'desayuno', 'desayunos',
       'entrada', 'entradas',
       'bebida', 'bebidas', 'litro', 'litros',
-      'guarnicion', 'guarniciones',
+      'guarnicion', 'guarniciones', 'guarnición',
       'postre', 'postres'
     ];
 

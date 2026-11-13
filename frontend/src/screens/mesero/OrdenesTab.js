@@ -140,7 +140,7 @@ export default function OrdenesTab() {
         const tor = data.alimentos.filter((a) => a.tipo === 'Torta' || a.tipo === 'Tortas').map((a) => a.nombre);
         const mol = data.alimentos.filter((a) => a.tipo === 'Mollete' || a.tipo === 'Molletes').map((a) => a.nombre);
         const ent = data.alimentos.filter((a) => a.tipo === 'Entrada').map((a) => a.nombre);
-        const gua = data.alimentos.filter((a) => a.tipo === 'Guarnicion').map((a) => a.nombre);
+        const gua = data.alimentos.filter((a) => (a.tipo || '').toLowerCase().includes('guarnic')).map((a) => a.nombre);
         const beb = data.alimentos.filter((a) => a.tipo === 'Bebida').map((a) => a.nombre);
         const gui = data.alimentos.filter((a) => a.tipo === 'Guiso' || a.nombre.toLowerCase().includes('guiso')).map((a) => a.nombre);
         const ext = data.alimentos.filter((a) => a.tipo === 'Extra').map((a) => a.nombre);

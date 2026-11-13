@@ -221,7 +221,7 @@ export default function SuperAdminHomeScreen() {
     if (catLower === 'comida' || catLower === 'comidas') return t === 'comida' || t === 'comidas';
     if (catLower === 'entradas' || catLower === 'entrada') return t === 'entrada' || t === 'entradas';
     if (catLower === 'aguas' || catLower === 'bebidas' || catLower === 'bebida') return esBebida;
-    if (catLower === 'guarniciones' || catLower === 'guarnicion') return t === 'guarnicion' || t === 'guarniciones';
+    if (catLower === 'guarniciones' || catLower === 'guarnicion') return t.includes('guarnic');
     if (catLower === 'postres' || catLower === 'postre') return esPostre;
     return true;
   };
@@ -1728,7 +1728,7 @@ export default function SuperAdminHomeScreen() {
       if (catFiltroMenu === 'Todas') return true;
       const catFilterLower = catFiltroMenu.toLowerCase();
       const aTipoLower = (a.tipo || '').toLowerCase();
-      if ((catFilterLower === 'guarniciones' || catFilterLower === 'guarnicion') && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
+      if ((catFilterLower === 'guarniciones' || catFilterLower === 'guarnicion') && aTipoLower.includes('guarnic')) return true;
       if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
       if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
       if (catFilterLower === 'molletes' && (aTipoLower === 'mollete' || aTipoLower === 'molletes')) return true;
@@ -2998,15 +2998,18 @@ export default function SuperAdminHomeScreen() {
 
               <Text style={styles.inputLabel}>Categoría:</Text>
               <View style={styles.tipoRolesGrid}>
-                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Litros', 'Postre', 'Torta', 'Molletes', 'Extra', 'Otros'].map((cat) => (
-                  <TouchableOpacity
-                    key={cat}
-                    style={[styles.rolOptionChip, formTipo === cat && styles.rolOptionChipActive]}
-                    onPress={() => setFormTipo(cat)}
-                  >
-                    <Text style={[styles.rolOptionText, formTipo === cat && styles.rolOptionTextActive]}>{cat}</Text>
-                  </TouchableOpacity>
-                ))}
+                {['Comida', 'Desayuno', 'Antojito', 'Bebida', 'Entrada', 'Guarnición', 'Litros', 'Postre', 'Torta', 'Molletes', 'Extra', 'Otros'].map((cat) => {
+                  const esActivo = (formTipo || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '') === cat.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+                  return (
+                    <TouchableOpacity
+                      key={cat}
+                      style={[styles.rolOptionChip, esActivo && styles.rolOptionChipActive]}
+                      onPress={() => setFormTipo(cat === 'Guarnición' ? 'Guarnicion' : cat)}
+                    >
+                      <Text style={[styles.rolOptionText, esActivo && styles.rolOptionTextActive]}>{cat}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
 
               {Boolean((formTipo || '').toLowerCase().includes('extra')) ? (
@@ -3181,7 +3184,7 @@ export default function SuperAdminHomeScreen() {
                         const catFilterLower = cat.toLowerCase();
                         const aTipoLower = (a.tipo || '').toLowerCase();
                         if (catFilterLower === 'postres' && (aTipoLower === 'postre' || aTipoLower === 'postres')) return true;
-                        if (catFilterLower === 'guarniciones' && (aTipoLower === 'guarnicion' || aTipoLower === 'guarniciones')) return true;
+                        if (catFilterLower === 'guarniciones' && aTipoLower.includes('guarnic')) return true;
                         if (catFilterLower === 'tortas' && (aTipoLower === 'torta' || aTipoLower === 'tortas')) return true;
                         if (catFilterLower === 'molletes' && (aTipoLower === 'mollete' || aTipoLower === 'molletes')) return true;
                         if (catFilterLower === 'extras' && (aTipoLower === 'extra' || aTipoLower === 'extras')) return true;
