@@ -179,17 +179,17 @@ export default function SuperAdminHomeScreen() {
       t === 'desayuno' || t === 'desayunos' ||
       t === 'entrada' || t === 'entradas' ||
       t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' || t === 'litro' || t === 'litros' ||
-      t === 'guarnicion' || t === 'guarniciones' ||
+      t.includes('guarnic') ||
       t === 'postre' || t === 'postres'
     );
     if (!esValido) return false;
 
-    // Para bebidas y postres, SOLO deben mostrarse los que aplican a paquete
+    // Para bebidas del Menú del Día, SOLO deben mostrarse las que aplican a paquete (los postres no requieren aplica_paquete)
     if (item) {
-      const esBebidaOPostre =
+      const esBebida =
         t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' ||
-        t === 'litro' || t === 'litros' || t === 'postre' || t === 'postres';
-      if (esBebidaOPostre) {
+        t === 'litro' || t === 'litros';
+      if (esBebida) {
         const aplica = item.aplica_paquete !== undefined && item.aplica_paquete !== null
           ? Number(item.aplica_paquete) === 1
           : true;
@@ -207,8 +207,8 @@ export default function SuperAdminHomeScreen() {
     const esBebida = t === 'bebida' || t === 'bebidas' || t === 'agua' || t === 'aguas' || t === 'litro' || t === 'litros';
     const esPostre = t === 'postre' || t === 'postres';
 
-    // En bebidas y postres del Menú del Día, SOLO deben mostrarse los que aplican a paquete
-    if (esBebida || esPostre) {
+    // En bebidas del Menú del Día, SOLO deben mostrarse las que aplican a paquete (los postres no requieren aplica_paquete)
+    if (esBebida) {
       const aplica = item.aplica_paquete !== undefined && item.aplica_paquete !== null
         ? Number(item.aplica_paquete) === 1
         : true;

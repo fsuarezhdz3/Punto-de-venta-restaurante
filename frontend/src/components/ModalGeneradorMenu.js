@@ -135,14 +135,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
     const postresItems = activos
       .filter((a) => {
         const t = (a.tipo || '').toLowerCase();
-        const esPostre = t === 'postre' || t === 'postres';
-        if (!esPostre) return false;
-
-        const aplica =
-          a.aplica_paquete !== undefined && a.aplica_paquete !== null
-            ? Number(a.aplica_paquete) === 1
-            : true;
-        return aplica;
+        return t === 'postre' || t === 'postres';
       })
       .map((a) => limpiar(a.nombre));
 
@@ -185,6 +178,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           entradasItems.length > 0
             ? entradasItems.join('\n')
             : 'Sopa de lentejas   $30\nSopa de pasta   $30',
+        tieneItemsActivos: entradasItems.length > 0,
         x: 60,
         y: 180,
         width: 330,
@@ -203,6 +197,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           guarnicionesItems.length > 0
             ? guarnicionesItems.join('\n')
             : 'Verduras al vapor   $20\nSpaguetti con carnes frias   $20\nEnsalada primavera   $20\nArroz rojo a la jardinera   $20\nFrijoles refritos   $20',
+        tieneItemsActivos: guarnicionesItems.length > 0,
         x: 60,
         y: 310,
         width: 440,
@@ -221,6 +216,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           platosFuertesItems.length > 0
             ? platosFuertesItems.join('\n')
             : "Bisteck al albañil   $70\nMole de olla   $70\nChile's rellenos en caldillo de jitomate   $70\nChile's rellenos de tres quesos en caldillo de jitomate   $70\nPechugas rellenas en crema de champiñones   $70\nPechugas rellenas en crema de chipotle   $70\nCostillita en salsa tatemada con nopales   $70\nAlbondigas en caldillo de jitomate   $70\nBisteck en chile negro   $70\nMilanesa de pollo con ensalada primavera   $70\nSabana de res con chilaquiles rojos o verdes   $70",
+        tieneItemsActivos: platosFuertesItems.length > 0,
         x: 60,
         y: 565,
         width: 510,
@@ -254,6 +250,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           aguasItems.length > 0
             ? aguasItems.join('\n')
             : 'Agua de horchata\nAgua de guayaba\nAgua de maracuya',
+        tieneItemsActivos: aguasItems.length > 0,
         x: 60,
         y: 1350,
         width: 360,
@@ -272,6 +269,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
           postresItems.length > 0
             ? postresItems.join('\n')
             : 'Carlota de limón\nPastel de tres leches',
+        tieneItemsActivos: postresItems.length > 0,
         x: 460,
         y: 1350,
         width: 360,
@@ -337,10 +335,14 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
         saved.titulo !== undefined && saved.titulo !== null && saved.titulo !== ''
           ? saved.titulo
           : b.titulo;
-      const textoFinal =
-        saved.texto !== undefined && saved.texto !== null && saved.texto !== ''
-          ? saved.texto
-          : b.texto;
+
+      // Si es un bloque de comida con platillos activos configurados hoy en el Menú del Día,
+      // usar automáticamente los platillos de hoy (b.texto).
+      // Si no hay platillos activos hoy, preservar el texto guardado previamente si existe.
+      const esBloqueDinamico = ['entradas', 'guarniciones', 'platoFuerte', 'agua', 'postre'].includes(b.id);
+      const textoFinal = (esBloqueDinamico && b.tieneItemsActivos)
+        ? b.texto
+        : (saved.texto !== undefined && saved.texto !== null && saved.texto !== '' ? saved.texto : b.texto);
 
       // Si el diseño guardado tiene el ancho anterior excesivo (>= 700px) para plato fuerte, corregirlo al ancho óptimo de 510px
       const widthFinal =
@@ -654,14 +656,79 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
             const itemName = priceMatch[1].trim();
             const itemPrice = priceMatch[2].trim();
 
-            ctx.textAlign = 'left';
-            ctx.fillText(itemName, b.x, curY + b.fontSize);
+            // Calcular ancho disponible para el nombre antes de chocar con el precio
+            const priceWidth = Math.ceil(ctx.measureText(itemPrice).width);
+            const spaceBetween = 24; // Separación mínima entre el texto y el precio
+            const maxNameWidth = Math.max(80, (b.width || 400) - priceWidth - spaceBetween);
 
-            ctx.textAlign = 'right';
-            ctx.fillText(itemPrice, b.x + b.width, curY + b.fontSize);
+            if (ctx.measureText(itemName).width <= maxNameWidth) {
+              ctx.textAlign = 'left';
+              ctx.fillText(itemName, b.x, curY + b.fontSize);
+
+              ctx.textAlign = 'right';
+              ctx.fillText(itemPrice, b.x + b.width, curY + b.fontSize);
+              curY += lineHeight;
+            } else {
+              // Salto de línea inteligente si el nombre del platillo es largo para no encimarse con el precio
+              const words = itemName.split(/\s+/).filter(Boolean);
+              let currentLine = '';
+              const nameLines = [];
+
+              words.forEach((w) => {
+                const testLine = currentLine ? `${currentLine} ${w}` : w;
+                if (ctx.measureText(testLine).width <= maxNameWidth) {
+                  currentLine = testLine;
+                } else {
+                  if (currentLine) nameLines.push(currentLine);
+                  currentLine = w;
+                }
+              });
+              if (currentLine) nameLines.push(currentLine);
+              if (nameLines.length === 0) nameLines.push(itemName);
+
+              // Dibujar primera línea con el precio alineado a la derecha
+              ctx.textAlign = 'left';
+              ctx.fillText(nameLines[0], b.x, curY + b.fontSize);
+
+              ctx.textAlign = 'right';
+              ctx.fillText(itemPrice, b.x + b.width, curY + b.fontSize);
+              curY += lineHeight;
+
+              // Dibujar las siguientes líneas del nombre largo respetando el espacio
+              for (let i = 1; i < nameLines.length; i++) {
+                ctx.textAlign = 'left';
+                ctx.fillText(nameLines[i], b.x, curY + b.fontSize);
+                curY += lineHeight;
+              }
+            }
           } else {
-            ctx.textAlign = b.align;
-            ctx.fillText(trimmed, posX, curY + b.fontSize);
+            // Línea sin precio: verificar si excede el ancho para hacer salto de línea
+            const maxLineWidth = b.width || (CANVAS_W - b.x);
+            if (ctx.measureText(trimmed).width > maxLineWidth) {
+              const words = trimmed.split(/\s+/).filter(Boolean);
+              let curSubLine = '';
+              const subLines = [];
+              words.forEach((w) => {
+                const test = curSubLine ? `${curSubLine} ${w}` : w;
+                if (ctx.measureText(test).width <= maxLineWidth) {
+                  curSubLine = test;
+                } else {
+                  if (curSubLine) subLines.push(curSubLine);
+                  curSubLine = w;
+                }
+              });
+              if (curSubLine) subLines.push(curSubLine);
+
+              ctx.textAlign = b.align;
+              subLines.forEach((sLine) => {
+                ctx.fillText(sLine, posX, curY + b.fontSize);
+                curY += lineHeight;
+              });
+            } else {
+              ctx.textAlign = b.align;
+              ctx.fillText(trimmed, posX, curY + b.fontSize);
+              curY += lineHeight;
+            }
           }
           curY += lineHeight;
         });
@@ -955,7 +1022,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
                           style={{
                             flexDirection: 'row',
                             justifyContent: 'space-between',
-                            alignItems: 'baseline',
+                            alignItems: 'flex-start',
                             width: '100%',
                           }}
                         >
@@ -967,6 +1034,7 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
                               color: b.color,
                               textAlign: 'left',
                               flex: 1,
+                              paddingRight: 16,
                               lineHeight: Math.round(b.fontSize * 1.35),
                             }}
                           >
@@ -979,7 +1047,6 @@ export default function ModalGeneradorMenu({ visible, onClose, alimentosCat = []
                               fontSize: b.fontSize,
                               color: b.color,
                               textAlign: 'right',
-                              marginLeft: 12,
                               lineHeight: Math.round(b.fontSize * 1.35),
                             }}
                           >
