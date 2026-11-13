@@ -136,7 +136,8 @@ const crearPedido = async (req, res) => {
   }
 
   try {
-    // Asegurar que la tabla alimentos_pedidos tenga las columnas necesarias
+    // Asegurar que la tabla alimentos_pedidos tenga las columnas necesarias y alimento sea NULL por defecto
+    try { await db.query('ALTER TABLE alimentos_pedidos MODIFY COLUMN alimento VARCHAR(100) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN guarnicion1 VARCHAR(150) DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN guarnicion2 VARCHAR(150) DEFAULT NULL'); } catch (e) {}
@@ -263,6 +264,7 @@ const getAlimentosPedidoPorMesa = async (req, res) => {
   const { num_mesa } = req.params;
 
   try {
+    try { await db.query('ALTER TABLE alimentos_pedidos MODIFY COLUMN alimento VARCHAR(100) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN bloques_marcados TEXT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN personalizado BOOLEAN DEFAULT FALSE'); } catch (e) {}
@@ -290,6 +292,7 @@ const getAlimentosPedidoPorMesa = async (req, res) => {
 const getTodasLasMesas = async (req, res) => {
   try {
     try { await db.query('ALTER TABLE pedidos ADD COLUMN corte INT DEFAULT NULL'); } catch (e) {}
+    try { await db.query('ALTER TABLE alimentos_pedidos MODIFY COLUMN alimento VARCHAR(100) NULL DEFAULT NULL'); } catch (e) {}
     try { await db.query("ALTER TABLE alimentos_pedidos ADD COLUMN metodo_pago VARCHAR(50) DEFAULT 'efectivo'"); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN id_alimento INT DEFAULT NULL'); } catch (e) {}
     try { await db.query('ALTER TABLE alimentos_pedidos ADD COLUMN bloques_marcados TEXT DEFAULT NULL'); } catch (e) {}
@@ -687,17 +690,25 @@ const revertirBarraItem = async (req, res) => {
 };
 
 // PUT /api/pedidos/alimento-pedido/:id/editar
-// Editar campos de un alimento_pedido y recalcular costo del pedido padre
+// Editar campos de un alimento_pedido y recalcular costo del pedido padre (incluye cambio de mesa)
 const editarAlimentoPedido = async (req, res) => {
   const { id } = req.params;
-  const { alimento, id_alimento, comentarios, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, costo, justificacion } = req.body;
+  const { alimento, id_alimento, comentarios, guarnicion1, guarnicion2, entrada, bebida, guiso, extras, costo, justificacion, num_mesa } = req.body;
 
   try {
-    const [rows] = await db.query('SELECT num_orden, comentarios, id_alimento FROM alimentos_pedidos WHERE id = ?', [id]);
+    const [rows] = await db.query(
+      `SELECT ap.num_orden, ap.comentarios, ap.id_alimento, ap.costo, ap.cuenta, p.num_mesa, p.costo as pedido_costo
+       FROM alimentos_pedidos ap
+       INNER JOIN pedidos p ON ap.num_orden = p.num_orden
+       WHERE ap.id = ?`,
+      [id]
+    );
     if (rows.length === 0) {
       return res.status(404).json({ error: 'Ítem de comanda no encontrado' });
     }
-    const numOrden = rows[0].num_orden;
+    const numOrdenOriginal = rows[0].num_orden;
+    let numOrdenActual = numOrdenOriginal;
+    const mesaActual = Number(rows[0].num_mesa);
     let comentariosActuales = comentarios !== undefined ? comentarios : (rows[0].comentarios || '');
 
     if (justificacion && String(justificacion).trim()) {
@@ -723,10 +734,63 @@ const editarAlimentoPedido = async (req, res) => {
       }
     }
 
+    // 1. Cambio de mesa para la orden si se seleccionó una mesa distinta
+    if (num_mesa !== undefined && num_mesa !== null && Number(num_mesa) !== mesaActual) {
+      const nuevaMesaInt = Number(num_mesa);
+
+      // Verificar si hay otros ítems en la orden original
+      const [otrosItems] = await db.query(
+        'SELECT id FROM alimentos_pedidos WHERE num_orden = ? AND id != ?',
+        [numOrdenOriginal, id]
+      );
+
+      // Verificar si la mesa destino ya tiene un pedido activo (estado 0 o 1)
+      const [pedidosDestino] = await db.query(
+        'SELECT num_orden FROM pedidos WHERE num_mesa = ? AND estado IN (0, 1) ORDER BY num_orden DESC LIMIT 1',
+        [nuevaMesaInt]
+      );
+
+      if (pedidosDestino.length > 0) {
+        // La mesa destino ya tiene pedido activo: transferir este ítem
+        const numOrdenDestino = pedidosDestino[0].num_orden;
+        numOrdenActual = numOrdenDestino;
+        await db.query('UPDATE alimentos_pedidos SET num_orden = ? WHERE id = ?', [numOrdenDestino, id]);
+
+        if (otrosItems.length === 0) {
+          // La orden original quedó vacía, eliminarla
+          await db.query('DELETE FROM pedidos WHERE num_orden = ?', [numOrdenOriginal]);
+        } else {
+          // Recalcular orden original
+          const [sumOrig] = await db.query('SELECT SUM(costo) as tot FROM alimentos_pedidos WHERE num_orden = ?', [numOrdenOriginal]);
+          await db.query('UPDATE pedidos SET costo = ? WHERE num_orden = ?', [sumOrig[0].tot || 0, numOrdenOriginal]);
+        }
+      } else {
+        // La mesa destino no tiene pedido activo
+        if (otrosItems.length === 0) {
+          // La orden original solo tenía este ítem, simplemente actualizar num_mesa del pedido
+          await db.query('UPDATE pedidos SET num_mesa = ? WHERE num_orden = ?', [nuevaMesaInt, numOrdenOriginal]);
+        } else {
+          // La orden original tiene otros ítems que se quedan en mesaActual: crear nuevo pedido para la nueva mesa
+          const costoItem = costo !== undefined ? Number(costo) : (Number(rows[0].costo) || 0);
+          const [nuevoPed] = await db.query(
+            'INSERT INTO pedidos (num_mesa, costo, estado, cuenta) VALUES (?, ?, 0, ?)',
+            [nuevaMesaInt, costoItem, rows[0].cuenta]
+          );
+          numOrdenActual = nuevoPed.insertId;
+          await db.query('UPDATE alimentos_pedidos SET num_orden = ? WHERE id = ?', [numOrdenActual, id]);
+
+          // Recalcular orden original
+          const [sumOrig] = await db.query('SELECT SUM(costo) as tot FROM alimentos_pedidos WHERE num_orden = ?', [numOrdenOriginal]);
+          await db.query('UPDATE pedidos SET costo = ? WHERE num_orden = ?', [sumOrig[0].tot || 0, numOrdenOriginal]);
+        }
+      }
+    }
+
+    // 2. Actualizar campos del alimento_pedido (permite alimento null o vacío)
     await db.query(
       `UPDATE alimentos_pedidos 
-       SET id_alimento = COALESCE(?, id_alimento),
-           alimento = COALESCE(?, alimento),
+       SET id_alimento = ?,
+           alimento = ?,
            comentarios = ?,
            guarnicion1 = ?,
            guarnicion2 = ?,
@@ -738,28 +802,35 @@ const editarAlimentoPedido = async (req, res) => {
        WHERE id = ?`,
       [
         idAlimentoFinal || null,
-        alimento || null,
+        alimento && String(alimento).trim() !== '' ? String(alimento).trim() : null,
         comentariosActuales || null,
-        guarnicion1 !== undefined ? guarnicion1 : null,
-        guarnicion2 !== undefined ? guarnicion2 : null,
-        entrada !== undefined ? entrada : null,
-        bebida !== undefined ? bebida : null,
-        guiso !== undefined ? guiso : null,
-        extras !== undefined ? extras : null,
+        guarnicion1 !== undefined ? (guarnicion1 || null) : null,
+        guarnicion2 !== undefined ? (guarnicion2 || null) : null,
+        entrada !== undefined ? (entrada || null) : null,
+        bebida !== undefined ? (bebida || null) : null,
+        guiso !== undefined ? (guiso || null) : null,
+        extras !== undefined ? (extras || null) : null,
         costo !== undefined ? Number(costo) : null,
         id,
       ]
     );
 
-    // Recalcular costo total del pedido padre
+    // 3. Recalcular costo total del pedido actual
     const [sumRows] = await db.query(
       'SELECT SUM(costo) as nuevo_total FROM alimentos_pedidos WHERE num_orden = ?',
-      [numOrden]
+      [numOrdenActual]
     );
     const nuevoTotal = sumRows[0].nuevo_total || 0;
-    await db.query('UPDATE pedidos SET costo = ? WHERE num_orden = ?', [nuevoTotal, numOrden]);
+    await db.query('UPDATE pedidos SET costo = ? WHERE num_orden = ?', [nuevoTotal, numOrdenActual]);
 
-    return res.json({ ok: true, id: Number(id), id_alimento: idAlimentoFinal || rows[0].id_alimento, nuevo_total: nuevoTotal });
+    return res.json({
+      ok: true,
+      id: Number(id),
+      id_alimento: idAlimentoFinal || rows[0].id_alimento,
+      nuevo_total: nuevoTotal,
+      num_mesa: num_mesa !== undefined ? Number(num_mesa) : mesaActual,
+      num_orden: numOrdenActual
+    });
   } catch (error) {
     console.error('Error al editar alimento_pedido:', error);
     return res.status(500).json({ error: 'Error interno al editar el ítem' });

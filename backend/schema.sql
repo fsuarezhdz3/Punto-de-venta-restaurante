@@ -84,7 +84,7 @@ CREATE TABLE IF NOT EXISTS alimentos_pedidos (
     id_alimento INT DEFAULT NULL,                -- Relación al catálogo maestro de alimentos
     costo DECIMAL(10,2) NOT NULL,
     estado INT NOT NULL DEFAULT 0,              -- 0: enviado a cocina, 1: servido, 2: entregado al cliente, 4: cobrado
-    alimento VARCHAR(100) NOT NULL,
+    alimento VARCHAR(100) DEFAULT NULL,
     guarnicion1 VARCHAR(150) DEFAULT NULL,       -- Guarnición 1 para paquetes
     guarnicion2 VARCHAR(150) DEFAULT NULL,       -- Guarnición 2 para paquetes
     entrada VARCHAR(150) DEFAULT NULL,           -- Entrada para paquetes

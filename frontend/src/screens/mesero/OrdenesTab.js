@@ -322,6 +322,12 @@ export default function OrdenesTab() {
     return pAlimento + pGuisoExtra + pBebida + pExtras;
   };
 
+  // Catálogo de mesas para selector en modal de edición
+  const catMesas = [
+    ...Array.from({ length: 20 }, (_, i) => `Mesa #${i + 1}`),
+    ...Array.from({ length: 10 }, (_, i) => `Para Llevar #${100 + i}`),
+  ];
+
   const abrirPicker = (field, title, options) => {
     setPickerConfig({ field, title, options });
     setPickerVisible(true);
@@ -329,6 +335,17 @@ export default function OrdenesTab() {
 
   const seleccionarOpcionPicker = (opcionNombre) => {
     const { field } = pickerConfig;
+    if (field === 'num_mesa') {
+      const match = String(opcionNombre).match(/\d+/);
+      const numMesa = match ? parseInt(match[0], 10) : 1;
+      setEditForm((prev) => ({
+        ...prev,
+        num_mesa: numMesa,
+      }));
+      setPickerVisible(false);
+      return;
+    }
+
     setEditForm((prev) => {
       const valorNuevo = opcionNombre === prev[field] ? '' : (opcionNombre || '');
       const nuevoForm = { ...prev, [field]: valorNuevo };
@@ -358,15 +375,29 @@ export default function OrdenesTab() {
     guiso: '',
     extras: '',
     comentarios: '',
+    num_mesa: 1,
     costo: '',
   });
 
   // Detectar categoría adecuada según las características del alimento
   const detectarCategoriaItem = (item) => {
     const alimentoNombre = (item.alimento || '').toLowerCase();
+    const idAlim = item.id_alimento;
+    let alimCatalog = null;
+    if (alimentosBD && alimentosBD.length > 0) {
+      if (idAlim) {
+        alimCatalog = alimentosBD.find((a) => a.id === idAlim);
+      }
+      if (!alimCatalog && item.alimento) {
+        alimCatalog = buscarAlimentoCatalog(item.alimento);
+      }
+    }
+
+    const catBD = (alimCatalog?.categoria || alimCatalog?.tipo || '').toLowerCase();
 
     if (
       item.guiso ||
+      catBD.includes('antojit') ||
       alimentoNombre.includes('sope') ||
       alimentoNombre.includes('gordita') ||
       alimentoNombre.includes('tlacoyo') ||
@@ -379,6 +410,7 @@ export default function OrdenesTab() {
     }
 
     if (
+      catBD.includes('desayun') ||
       alimentoNombre.includes('chilaquil') ||
       alimentoNombre.includes('huevo') ||
       alimentoNombre.includes('omelette') ||
@@ -388,19 +420,16 @@ export default function OrdenesTab() {
       return 'desayunos';
     }
 
-    if (item.entrada || alimentoNombre.includes('paquete') || alimentoNombre.includes('milanesa') || alimentoNombre.includes('pechuga') || alimentoNombre.includes('carne asada') || alimentoNombre.includes('mole')) {
-      return 'comida';
-    }
-
-    if (alimentoNombre.includes('torta')) {
+    if (catBD.includes('torta') || alimentoNombre.includes('torta')) {
       return 'tortas';
     }
 
-    if (alimentoNombre.includes('mollete')) {
+    if (catBD.includes('mollete') || alimentoNombre.includes('mollete')) {
       return 'molletes';
     }
 
     if (
+      catBD.includes('bebid') ||
       alimentoNombre.includes('jugo') ||
       alimentoNombre.includes('café') ||
       alimentoNombre.includes('refresco') ||
@@ -410,11 +439,8 @@ export default function OrdenesTab() {
       return 'bebidas';
     }
 
-    if (item.guarnicion1 || item.guarnicion2) {
-      return 'comida';
-    }
-
-    return 'otros';
+    // Por defecto categorizar como comida (permite entrada, guarniciones, bebida, etc.)
+    return 'comida';
   };
 
   // Abrir Modal de Edición pre-llenado
@@ -427,6 +453,12 @@ export default function OrdenesTab() {
     const cat = detectarCategoriaItem(item);
     setCategoriaEditForm(cat);
     setItemEditando(item);
+
+    const numMesaItem =
+      item.num_mesa !== undefined && item.num_mesa !== null
+        ? Number(item.num_mesa)
+        : (selectedMesa ? Number(selectedMesa.num_mesa || selectedMesa.id || 1) : 1);
+
     const formInicial = {
       alimento: item.alimento ? limpiarZona(item.alimento) : '',
       entrada: item.entrada ? limpiarZona(item.entrada) : '',
@@ -436,6 +468,7 @@ export default function OrdenesTab() {
       guiso: item.guiso ? limpiarZona(item.guiso) : (cat === 'antojitos' ? 'Sencillo' : ''),
       extras: item.extras ? limpiarZona(item.extras) : '',
       comentarios: item.comentarios || '',
+      num_mesa: numMesaItem,
       costo: String(item.costo || '0'),
     };
 
@@ -460,7 +493,7 @@ export default function OrdenesTab() {
 
     const alimentoLimpio = editForm.alimento ? limpiarZona(editForm.alimento) : '';
     const zonaAlimento = editForm.alimento ? obtenerZonaItemCatalog(alimentoLimpio, esBebida ? 'barra' : (esAntojito ? 'comal' : 'cocina')) : 'cocina';
-    const alimentoFinal = alimentoLimpio ? `${alimentoLimpio}-${zonaAlimento}` : '';
+    const alimentoFinal = alimentoLimpio ? `${alimentoLimpio}-${zonaAlimento}` : null;
 
     let entradaFinal = null;
     if (esComida && editForm.entrada) {
@@ -493,6 +526,7 @@ export default function OrdenesTab() {
       extras: (categoriaEditForm !== 'otros') ? (editForm.extras ? limpiarZona(editForm.extras) : null) : null,
       comentarios: editForm.comentarios || null,
       costo: Number(editForm.costo) || 0,
+      num_mesa: editForm.num_mesa !== undefined ? Number(editForm.num_mesa) : undefined,
     };
 
     try {
@@ -503,27 +537,10 @@ export default function OrdenesTab() {
       });
 
       if (res.ok) {
-        setItemsComanda((prev) =>
-          prev.map((i) =>
-            i.id === itemEditando.id
-              ? {
-                  ...i,
-                  ...payload,
-                  id_alimento: idAlimentoFinal,
-                  entrada: payload.entrada || '',
-                  guiso: payload.guiso || '',
-                  guarnicion1: payload.guarnicion1 || '',
-                  guarnicion2: payload.guarnicion2 || '',
-                  bebida: payload.bebida || '',
-                  extras: payload.extras || '',
-                  comentarios: payload.comentarios || '',
-                }
-              : i
-          )
-        );
         setEditModalVisible(false);
         setItemEditando(null);
         Alert.alert('Éxito', 'Orden editada correctamente.');
+        await cargarOrdenesComanda(false);
       } else {
         Alert.alert('Error', 'No se pudo guardar la edición de la orden.');
       }
@@ -1287,6 +1304,50 @@ export default function OrdenesTab() {
               </TouchableOpacity>
             </View>
 
+            {/* Selector de Categorías (Pills) para cambiar fácilmente de categoría */}
+            <View style={{ marginBottom: 10 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingVertical: 4 }}>
+                {[
+                  { key: 'comida', label: 'Comida', icon: 'restaurant-outline', color: '#EA580C' },
+                  { key: 'desayunos', label: 'Desayunos', icon: 'egg-outline', color: '#D97706' },
+                  { key: 'antojitos', label: 'Antojitos', icon: 'fast-food-outline', color: '#DC2626' },
+                  { key: 'tortas', label: 'Tortas', icon: 'nutrition-outline', color: '#B45309' },
+                  { key: 'molletes', label: 'Molletes', icon: 'restaurant-outline', color: '#D97706' },
+                  { key: 'bebidas', label: 'Bebidas', icon: 'wine-outline', color: '#0284C7' },
+                  { key: 'otros', label: 'Otros', icon: 'cube-outline', color: '#64748B' },
+                ].map((cat) => {
+                  const isSelected = categoriaEditForm === cat.key;
+                  return (
+                    <TouchableOpacity
+                      key={cat.key}
+                      style={[
+                        styles.catPillModal,
+                        isSelected && { backgroundColor: cat.color, borderColor: cat.color },
+                      ]}
+                      onPress={() => {
+                        setCategoriaEditForm(cat.key);
+                        const nuevoCosto = calcularCostoPaqueteEdicion(cat.key, editForm);
+                        if (nuevoCosto > 0) {
+                          setEditForm((p) => ({ ...p, costo: String(nuevoCosto) }));
+                        }
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons
+                        name={cat.icon}
+                        size={14}
+                        color={isSelected ? '#FFFFFF' : '#475569'}
+                        style={{ marginRight: 5 }}
+                      />
+                      <Text style={[styles.catPillModalText, isSelected && { color: '#FFFFFF', fontWeight: '700' }]}>
+                        {cat.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
             {esPaqueteCompletoEdicion(categoriaEditForm, editForm) && (
               <View style={[styles.tarifaBadgeBox, styles.tarifaBadgeBoxCompleto]}>
                 <Ionicons
@@ -1307,7 +1368,7 @@ export default function OrdenesTab() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* 1. SECCIÓN PRINCIPAL SEGÚN CATEGORÍA */}
+              {/* SECCIÓN SEGÚN CATEGORÍA */}
               {categoriaEditForm === 'desayunos' && (
                 <>
                   <Text style={styles.inputLabel}>Desayuno Principal</Text>
@@ -1366,20 +1427,8 @@ export default function OrdenesTab() {
 
               {categoriaEditForm === 'comida' && (
                 <>
-                  <Text style={styles.inputLabel}>Platillo / Comida Principal</Text>
-                  <TouchableOpacity
-                    style={styles.pickerSelectorBtn}
-                    onPress={() => abrirPicker('alimento', 'Seleccionar Platillo Principal', catPlatosFuertes)}
-                    activeOpacity={0.8}
-                  >
-                    <Ionicons name="restaurant-outline" size={18} color="#EA580C" style={{ marginRight: 8 }} />
-                    <Text style={styles.pickerSelectorBtnText}>
-                      {editForm.alimento || 'Seleccionar Platillo...'}
-                    </Text>
-                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
-                  </TouchableOpacity>
-
-                  <Text style={styles.inputLabel}>Entrada</Text>
+                  {/* 1. Entrada */}
+                  <Text style={styles.inputLabel}>1. Entrada</Text>
                   <TouchableOpacity
                     style={styles.pickerSelectorBtn}
                     onPress={() => abrirPicker('entrada', 'Seleccionar Entrada', catEntradas)}
@@ -1392,7 +1441,22 @@ export default function OrdenesTab() {
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
 
-                  <Text style={styles.inputLabel}>Guarnición 1</Text>
+                  {/* 2. Plato Fuerte */}
+                  <Text style={styles.inputLabel}>2. Plato Fuerte / Platillo Principal</Text>
+                  <TouchableOpacity
+                    style={styles.pickerSelectorBtn}
+                    onPress={() => abrirPicker('alimento', 'Seleccionar Plato Fuerte', catPlatosFuertes)}
+                    activeOpacity={0.8}
+                  >
+                    <Ionicons name="restaurant-outline" size={18} color="#EA580C" style={{ marginRight: 8 }} />
+                    <Text style={styles.pickerSelectorBtnText}>
+                      {editForm.alimento ? editForm.alimento : 'Sin plato fuerte'}
+                    </Text>
+                    <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+                  </TouchableOpacity>
+
+                  {/* 3. Guarnición 1 */}
+                  <Text style={styles.inputLabel}>3. Guarnición 1</Text>
                   <TouchableOpacity
                     style={styles.pickerSelectorBtn}
                     onPress={() => abrirPicker('guarnicion1', 'Seleccionar Guarnición 1', catGuarniciones)}
@@ -1405,7 +1469,8 @@ export default function OrdenesTab() {
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
 
-                  <Text style={styles.inputLabel}>Guarnición 2</Text>
+                  {/* 4. Guarnición 2 */}
+                  <Text style={styles.inputLabel}>4. Guarnición 2</Text>
                   <TouchableOpacity
                     style={styles.pickerSelectorBtn}
                     onPress={() => abrirPicker('guarnicion2', 'Seleccionar Guarnición 2', catGuarniciones)}
@@ -1418,7 +1483,8 @@ export default function OrdenesTab() {
                     <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
                   </TouchableOpacity>
 
-                  <Text style={styles.inputLabel}>Bebida</Text>
+                  {/* 5. Bebida */}
+                  <Text style={styles.inputLabel}>5. Bebida</Text>
                   <TouchableOpacity
                     style={styles.pickerSelectorBtn}
                     onPress={() => abrirPicker('bebida', 'Seleccionar Bebida', catBebidas)}
@@ -1552,7 +1618,7 @@ export default function OrdenesTab() {
                 </>
               )}
 
-              {/* 2. EXTRAS (Sólo para categorías con extras) */}
+              {/* 6. EXTRAS (Sólo para categorías con extras) */}
               {categoriaEditForm !== 'bebidas' && categoriaEditForm !== 'otros' && (
                 <>
                   <Text style={styles.inputLabel}>Extras</Text>
@@ -1598,7 +1664,7 @@ export default function OrdenesTab() {
                 </>
               )}
 
-              {/* 3. COMENTARIOS / NOTAS */}
+              {/* 7. COMENTARIOS / NOTAS */}
               <Text style={styles.inputLabel}>Comentarios / Notas del Mesero</Text>
               <TextInput
                 style={[styles.textInput, { height: 60, textAlignVertical: 'top' }]}
@@ -1613,7 +1679,23 @@ export default function OrdenesTab() {
                 }}
               />
 
-              {/* 4. COSTO TOTAL */}
+              {/* 8. MESA */}
+              <Text style={styles.inputLabel}>Mesa Asignada</Text>
+              <TouchableOpacity
+                style={styles.pickerSelectorBtn}
+                onPress={() => abrirPicker('num_mesa', 'Seleccionar Mesa para la Orden', catMesas)}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="grid-outline" size={18} color="#0F766E" style={{ marginRight: 8 }} />
+                <Text style={styles.pickerSelectorBtnText}>
+                  {Number(editForm.num_mesa) >= 100
+                    ? `Para Llevar #${editForm.num_mesa}`
+                    : `Mesa #${editForm.num_mesa || 1}`}
+                </Text>
+                <Ionicons name="chevron-forward" size={18} color="#94A3B8" />
+              </TouchableOpacity>
+
+              {/* 9. COSTO TOTAL */}
               <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
                 <Text style={styles.inputLabel}>Costo Total ($)</Text>
                 {esMesero && (
@@ -1687,18 +1769,23 @@ export default function OrdenesTab() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              {/* Opción Sin Selección */}
-              <TouchableOpacity
-                style={styles.pickerOptionCard}
-                onPress={() => seleccionarOpcionPicker('')}
-                activeOpacity={0.8}
-              >
-                <Ionicons name="ban-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
-                <Text style={[styles.pickerOptionText, { color: '#94A3B8' }]}>Sin Selección (Ninguno)</Text>
-              </TouchableOpacity>
+              {/* Opción Sin Selección (No aplica para mesa) */}
+              {pickerConfig.field !== 'num_mesa' && (
+                <TouchableOpacity
+                  style={styles.pickerOptionCard}
+                  onPress={() => seleccionarOpcionPicker('')}
+                  activeOpacity={0.8}
+                >
+                  <Ionicons name="ban-outline" size={20} color="#94A3B8" style={{ marginRight: 10 }} />
+                  <Text style={[styles.pickerOptionText, { color: '#94A3B8' }]}>Sin Selección (Ninguno)</Text>
+                </TouchableOpacity>
+              )}
 
               {pickerConfig.options.map((opcionNombre, idx) => {
-                const isSelected = editForm[pickerConfig.field] === opcionNombre;
+                const isSelected =
+                  pickerConfig.field === 'num_mesa'
+                    ? Number(editForm.num_mesa) === parseInt(String(opcionNombre).match(/\d+/)?.[0] || '1', 10)
+                    : editForm[pickerConfig.field] === opcionNombre;
 
                 return (
                   <TouchableOpacity
@@ -1730,7 +1817,7 @@ export default function OrdenesTab() {
         titulo="¿Eliminar alimento?"
         mensaje={
           itemAEliminar
-            ? `¿Estás seguro de cancelar "${limpiarZona(itemAEliminar.alimento)}"? Esta acción eliminará el alimento de la comanda.`
+            ? `¿Estás seguro de cancelar "${limpiarZona(itemAEliminar.alimento) || itemAEliminar.entrada || itemAEliminar.guarnicion1 || itemAEliminar.bebida || 'este pedido'}"? Esta acción eliminará el alimento de la comanda.`
             : ''
         }
         onConfirm={handleConfirmarEliminarItem}
@@ -2558,5 +2645,22 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#0F172A',
     height: '100%',
+  },
+  catPillModal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: '#CBD5E1',
+    marginRight: 8,
+    height: 34,
+  },
+  catPillModalText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: '#475569',
   },
 });
