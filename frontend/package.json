@@ -21,10 +21,13 @@
     "extraMetadata": {
       "main": "electron-main.js"
     },
+    "npmRebuild": false,
+    "nodeGypRebuild": false,
     "files": [
       "dist/**/*",
       "electron-main.js",
-      "assets/**/*"
+      "assets/**/*",
+      "!node_modules/**/*"
     ],
     "win": {
       "target": [
