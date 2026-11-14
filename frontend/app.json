@@ -2,6 +2,7 @@
   "expo": {
     "name": "POS",
     "slug": "la-cocina-pos",
+    "owner": "fsuarezhdz1",
     "version": "1.0.0",
     "orientation": "default",
     "icon": "./assets/iconoapp.png",
@@ -14,7 +15,13 @@
         "foregroundImage": "./assets/iconoapp.png",
         "backgroundColor": "#FFFFFF"
       },
-      "package": "com.lacocina.pos"
+      "package": "com.lacocina.pos",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/iconoapp.png"
@@ -44,7 +51,7 @@
     ],
     "extra": {
       "eas": {
-        "projectId": "685f8056-7247-4c75-8e88-4ae2a2a11d8f"
+        "projectId": "89f4cae8-1965-41d3-ae75-85c5239e5804"
       }
     }
   }
