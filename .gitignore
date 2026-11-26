@@ -38,3 +38,7 @@ desktop.ini
 *.temp
 .cache/
 config.bat
+# Proteccion de credenciales locales (Metrix Clean 4.0)
+.env
+.env.*
+!.env.example
